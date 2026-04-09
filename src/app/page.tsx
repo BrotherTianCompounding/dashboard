@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import UploadZone from "../components/UploadZone";
 import PortfolioOverview from "../components/PortfolioOverview";
+import AllocationChart from "../components/AllocationChart";
 import { classifyHoldings } from "../lib/classifyHoldings";
 import { calculateTargets } from "../lib/calculateTargets";
 import type {
@@ -117,6 +118,19 @@ export default function Home() {
 
       {current && (
         <PortfolioOverview snapshot={current} comparison={comparison} />
+      )}
+
+      {current && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-[#1a1f2e] rounded-xl p-6">
+            <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
+              资产分配 Asset Allocation
+            </h2>
+            <AllocationChart categories={current.categories} />
+          </div>
+          {/* AllocationTable will go here in next task */}
+          <div />
+        </div>
       )}
     </main>
   );
