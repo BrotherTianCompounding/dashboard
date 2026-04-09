@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import UploadZone from "../components/UploadZone";
+import PortfolioOverview from "../components/PortfolioOverview";
 import { classifyHoldings } from "../lib/classifyHoldings";
 import { calculateTargets } from "../lib/calculateTargets";
 import type {
@@ -115,9 +116,7 @@ export default function Home() {
       )}
 
       {current && (
-        <div className="text-gray-400 text-sm">
-          已解析：总净值 ${current.totalValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-        </div>
+        <PortfolioOverview snapshot={current} comparison={comparison} />
       )}
     </main>
   );
