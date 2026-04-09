@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import UploadZone from "../components/UploadZone";
 import PortfolioOverview from "../components/PortfolioOverview";
 import AllocationChart from "../components/AllocationChart";
+import AllocationTable from "../components/AllocationTable";
 import { classifyHoldings } from "../lib/classifyHoldings";
 import { calculateTargets } from "../lib/calculateTargets";
 import type {
@@ -128,8 +129,18 @@ export default function Home() {
             </h2>
             <AllocationChart categories={current.categories} />
           </div>
-          {/* AllocationTable will go here in next task */}
-          <div />
+          <div className="bg-[#1a1f2e] rounded-xl p-6">
+            <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
+              当前 vs 目标 Current vs Target
+            </h2>
+            <AllocationTable
+              categories={current.categories}
+              safeSideBreakdown={current.safeSideBreakdown}
+              targets={targets}
+              totalValue={current.totalValue}
+              comparison={comparison}
+            />
+          </div>
         </div>
       )}
     </main>
