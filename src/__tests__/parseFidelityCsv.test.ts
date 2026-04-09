@@ -38,6 +38,22 @@ describe("parseFidelityCsv", () => {
     const spaxx = rows.find((r) => r.symbol === "SPAXX")!;
     expect(spaxx.currentValue).toBe(18500.0);
   });
+
+  it("strips ** from SPAXX** symbol", () => {
+    const csv = `Account Name,Symbol,Description,Quantity,Last Price,Current Value,Cost Basis Total,Total Gain/Loss Dollar,Percent Of Account
+Individual,SPAXX**,HELD IN MONEY MARKET,,,,$44600.00,,,11.43%`;
+    const rows = parseFidelityCsv(csv);
+    expect(rows[0].symbol).toBe("SPAXX");
+  });
+
+  it("filters out Pending activity rows", () => {
+    const csv = `Account Name,Symbol,Description,Quantity,Last Price,Current Value,Cost Basis Total,Total Gain/Loss Dollar,Percent Of Account
+Individual,VOO,VANGUARD,80,$621.34,$49707.20,$33120.43,$16586.77,12.74%
+Individual,Pending activity,,,,,-$2144.54,,,`;
+    const rows = parseFidelityCsv(csv);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].symbol).toBe("VOO");
+  });
 });
 
 describe("parseDateFromFilename", () => {

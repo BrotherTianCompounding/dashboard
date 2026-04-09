@@ -16,10 +16,17 @@ export function parseFidelityCsv(csvString: string): FidelityRow[] {
   });
 
   return result.data
-    .filter((row) => row["Symbol"] && row["Symbol"].trim() !== "")
+    .filter((row) => {
+      const symbol = (row["Symbol"] ?? "").trim();
+      if (!symbol) return false;
+      // Filter out "Pending activity" and disclaimer rows
+      const desc = (row["Description"] ?? "").trim();
+      if (desc === "" && symbol === "Pending activity") return false;
+      return true;
+    })
     .map((row) => ({
-      accountName: (row["Account Name/Number"] ?? "").trim(),
-      symbol: (row["Symbol"] ?? "").trim(),
+      accountName: (row["Account Name"] ?? row["Account Name/Number"] ?? "").trim(),
+      symbol: (row["Symbol"] ?? "").trim().replace(/\*+$/, ""), // SPAXX** → SPAXX
       description: (row["Description"] ?? "").trim(),
       quantity: parseNum(row["Quantity"]),
       lastPrice: parseNum(row["Last Price"]),

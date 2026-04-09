@@ -100,6 +100,19 @@ describe("classifyHoldings", () => {
     expect(result[0].category).toBe("leaps");
   });
 
+  it("classifies long-dated calls with $ in strike as leaps", () => {
+    const rows = [
+      makeRow({
+        symbol: "-TSLA280121C250",
+        description: "TSLA JAN 21 2028 $250 CALL",
+        quantity: 1,
+        currentValue: 14430,
+      }),
+    ];
+    const result = classifyHoldings(rows);
+    expect(result[0].category).toBe("leaps");
+  });
+
   it("classifies short-dated calls as wheel (covered call)", () => {
     const rows = [
       makeRow({

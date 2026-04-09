@@ -18,7 +18,7 @@ const MONTH_MAP: Record<string, number> = {
 
 function parseOptionExpiry(description: string): Date | null {
   const match = description.match(
-    /([A-Z]{3})\s+(\d{2})\s+(\d{4})\s+[\d.]+\s+(PUT|CALL)/
+    /([A-Z]{3})\s+(\d{2})\s+(\d{4})\s+\$?[\d.]+\s+(PUT|CALL)/
   );
   if (!match) return null;
   const month = MONTH_MAP[match[1]];

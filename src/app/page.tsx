@@ -15,28 +15,49 @@ import type {
   SafeSideBreakdown,
 } from "../lib/types";
 
+/**
+ * Calculate total account value using Fidelity's Percent Of Account field.
+ * Method: pick large holdings, compute currentValue / (percentOfAccount/100),
+ * then average for accuracy.
+ */
+function calcTotalFromPercent(rows: FidelityRow[]): number {
+  const estimates: number[] = [];
+  for (const row of rows) {
+    // Only use rows with meaningful percent and positive current value
+    if (row.percentOfAccount > 1 && row.currentValue > 0) {
+      estimates.push(row.currentValue / (row.percentOfAccount / 100));
+    }
+  }
+  if (estimates.length === 0) {
+    // Fallback: sum all current values
+    return rows.reduce((sum, r) => sum + r.currentValue, 0);
+  }
+  // Average the top 3 largest estimates for stability
+  estimates.sort((a, b) => b - a);
+  const top = estimates.slice(0, Math.min(3, estimates.length));
+  return top.reduce((sum, v) => sum + v, 0) / top.length;
+}
+
 function buildSnapshot(
   rows: FidelityRow[],
   fileName: string,
   date: Date | null
 ): PortfolioSnapshot {
   const classified = classifyHoldings(rows);
-
-  const totalValue = classified.reduce(
-    (sum, h) => sum + Math.abs(h.currentValue),
-    0
-  );
+  const totalValue = calcTotalFromPercent(rows);
 
   const categoryMap = new Map<string, CategorySummary>();
   for (const h of classified) {
+    // Use actual currentValue (negative for short options is correct)
+    const value = h.currentValue;
     const existing = categoryMap.get(h.category);
     if (existing) {
-      existing.totalValue += Math.abs(h.currentValue);
+      existing.totalValue += value;
       existing.holdings.push(h);
     } else {
       categoryMap.set(h.category, {
         category: h.category,
-        totalValue: Math.abs(h.currentValue),
+        totalValue: value,
         percentOfPortfolio: 0,
         holdings: [h],
       });
@@ -45,7 +66,9 @@ function buildSnapshot(
 
   const categories = Array.from(categoryMap.values()).map((cat) => ({
     ...cat,
-    percentOfPortfolio: totalValue > 0 ? (cat.totalValue / totalValue) * 100 : 0,
+    // Use absolute value for percentage calculation (short options have negative values)
+    totalValue: Math.abs(cat.totalValue),
+    percentOfPortfolio: totalValue > 0 ? (Math.abs(cat.totalValue) / totalValue) * 100 : 0,
   }));
 
   const safeSideHoldings = classified.filter((h) => h.category === "safe-side");
