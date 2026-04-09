@@ -118,28 +118,32 @@ export default function Home() {
       )}
 
       {current && (
-        <PortfolioOverview snapshot={current} comparison={comparison} />
+        <div className="animate-fade-in">
+          <PortfolioOverview snapshot={current} comparison={comparison} />
+        </div>
       )}
 
       {current && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-[#1a1f2e] rounded-xl p-6">
-            <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
-              资产分配 Asset Allocation
-            </h2>
-            <AllocationChart categories={current.categories} />
-          </div>
-          <div className="bg-[#1a1f2e] rounded-xl p-6">
-            <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
-              当前 vs 目标 Current vs Target
-            </h2>
-            <AllocationTable
-              categories={current.categories}
-              safeSideBreakdown={current.safeSideBreakdown}
-              targets={targets}
-              totalValue={current.totalValue}
-              comparison={comparison}
-            />
+        <div className="animate-fade-in" style={{ animationDelay: "0.2s", opacity: 0 }}>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-[#1a1f2e] rounded-xl p-6">
+              <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
+                资产分配 Asset Allocation
+              </h2>
+              <AllocationChart categories={current.categories} />
+            </div>
+            <div className="bg-[#1a1f2e] rounded-xl p-6">
+              <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
+                当前 vs 目标 Current vs Target
+              </h2>
+              <AllocationTable
+                categories={current.categories}
+                safeSideBreakdown={current.safeSideBreakdown}
+                targets={targets}
+                totalValue={current.totalValue}
+                comparison={comparison}
+              />
+            </div>
           </div>
         </div>
       )}
