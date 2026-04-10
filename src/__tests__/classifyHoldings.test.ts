@@ -31,14 +31,21 @@ describe("classifyHoldings", () => {
     expect(result[0].safeSideSubCategory).toBe("voo");
   });
 
-  it("classifies SPY and FXAIX as safe-side/stocks", () => {
+  it("classifies SPY and FXAIX as safe-side/voo (S&P 500 group)", () => {
     const rows = [
       makeRow({ symbol: "SPY", currentValue: 5000 }),
       makeRow({ symbol: "FXAIX", currentValue: 3000 }),
     ];
     const result = classifyHoldings(rows);
     expect(result.every((r) => r.category === "safe-side")).toBe(true);
-    expect(result.every((r) => r.safeSideSubCategory === "stocks")).toBe(true);
+    expect(result.every((r) => r.safeSideSubCategory === "voo")).toBe(true);
+  });
+
+  it("classifies QQQ as safe-side/qqqm (Nasdaq 100 group)", () => {
+    const rows = [makeRow({ symbol: "QQQ", currentValue: 16000 })];
+    const result = classifyHoldings(rows);
+    expect(result[0].category).toBe("safe-side");
+    expect(result[0].safeSideSubCategory).toBe("qqqm");
   });
 
   it("classifies NVDA (positive shares) as safe-side/stocks", () => {
@@ -67,7 +74,7 @@ describe("classifyHoldings", () => {
     expect(result[0].category).toBe("wheel");
   });
 
-  it("classifies stock held alongside a short put (wheel assign) as wheel", () => {
+  it("classifies stock as safe-side even if it has a short put", () => {
     const rows = [
       makeRow({
         symbol: "-HOOD250418P32",
@@ -84,7 +91,8 @@ describe("classifyHoldings", () => {
     ];
     const result = classifyHoldings(rows);
     const hoodStock = result.find((r) => r.symbol === "HOOD" && r.quantity > 0)!;
-    expect(hoodStock.category).toBe("wheel");
+    expect(hoodStock.category).toBe("safe-side");
+    expect(hoodStock.safeSideSubCategory).toBe("stocks");
   });
 
   it("classifies long-dated calls (>180 DTE) as leaps", () => {
