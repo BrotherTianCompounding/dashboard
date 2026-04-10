@@ -8,7 +8,7 @@ const SAFE_SIDE_TICKERS: Record<string, SafeSideSubCategory> = {
   VOO: "voo",
   SPY: "voo",    // SPY grouped with VOO (both S&P 500)
   FXAIX: "voo",  // Fidelity 500 Index, grouped with VOO
-  VGT: "voo",    // Vanguard IT ETF, grouped with VOO as index
+  VGT: "qqqm",   // Vanguard IT ETF, grouped with QQQM (tech/Nasdaq)
 };
 
 /** Cash-equivalent symbols */
