@@ -84,7 +84,21 @@ function buildSnapshot(
       .reduce((sum, h) => sum + h.currentValue, 0),
   };
 
-  return { totalValue, categories, safeSideBreakdown, date, fileName };
+  // Top 4 individual stocks by value (excluding QQQM, VOO, SPY, FXAIX)
+  const EXCLUDE_FROM_TOP = new Set(["QQQM", "VOO", "SPY", "FXAIX"]);
+  const stockHoldings = safeSideHoldings
+    .filter((h) => h.safeSideSubCategory === "stocks" && !EXCLUDE_FROM_TOP.has(h.symbol));
+  // Merge duplicate symbols (e.g. QQQM appearing twice in CSV)
+  const stockMap = new Map<string, number>();
+  for (const h of stockHoldings) {
+    stockMap.set(h.symbol, (stockMap.get(h.symbol) ?? 0) + h.currentValue);
+  }
+  const topStocks = Array.from(stockMap.entries())
+    .map(([symbol, currentValue]) => ({ symbol, currentValue }))
+    .sort((a, b) => b.currentValue - a.currentValue)
+    .slice(0, 4);
+
+  return { totalValue, categories, safeSideBreakdown, topStocks, date, fileName };
 }
 
 export default function Home() {
@@ -165,6 +179,7 @@ export default function Home() {
                 targets={targets}
                 totalValue={current.totalValue}
                 comparison={comparison}
+                topStocks={current.topStocks}
               />
             </div>
           </div>

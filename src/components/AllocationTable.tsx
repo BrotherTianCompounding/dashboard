@@ -5,6 +5,7 @@ import type {
   TargetAllocation,
   SafeSideBreakdown,
   PortfolioComparison,
+  TopStock,
 } from "../lib/types";
 
 interface AllocationTableProps {
@@ -13,6 +14,7 @@ interface AllocationTableProps {
   targets: TargetAllocation;
   totalValue: number;
   comparison: PortfolioComparison | null;
+  topStocks: TopStock[];
 }
 
 function formatDollar(value: number): string {
@@ -20,10 +22,6 @@ function formatDollar(value: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-}
-
-function getDeviation(current: number, target: number): number {
-  return current - target;
 }
 
 function deviationColor(deviation: number): string {
@@ -37,7 +35,8 @@ interface RowData {
   value: number;
   currentPct: number;
   targetPct: number;
-  indent?: boolean;
+  indent?: number; // 0 = top level, 1 = sub, 2 = sub-sub
+  showDeviation?: boolean;
 }
 
 export default function AllocationTable({
@@ -46,6 +45,7 @@ export default function AllocationTable({
   targets,
   totalValue,
   comparison,
+  topStocks,
 }: AllocationTableProps) {
   const getCategoryValue = (cat: string): number => {
     return categories.find((c) => c.category === cat)?.totalValue ?? 0;
@@ -55,51 +55,76 @@ export default function AllocationTable({
     return categories.find((c) => c.category === cat)?.percentOfPortfolio ?? 0;
   };
 
+  const pct = (val: number) => totalValue > 0 ? (val / totalValue) * 100 : 0;
+
+  // Single stock target = 10% of safe-side target (as % of total portfolio)
+  const singleStockTargetPct = targets.safeSide * 0.10;
+
   const rows: RowData[] = [
     {
-      label: "安全端 Safe Side",
+      label: "定投仓 DCA",
       value: getCategoryValue("safe-side"),
       currentPct: getCategoryPct("safe-side"),
       targetPct: targets.safeSide,
+      indent: 0,
+      showDeviation: true,
     },
     {
       label: "└ QQQM",
       value: safeSideBreakdown.qqqm,
-      currentPct: totalValue > 0 ? (safeSideBreakdown.qqqm / totalValue) * 100 : 0,
+      currentPct: pct(safeSideBreakdown.qqqm),
       targetPct: targets.safeSideInner.qqqm,
-      indent: true,
+      indent: 1,
+      showDeviation: true,
     },
     {
       label: "└ VOO",
       value: safeSideBreakdown.voo,
-      currentPct: totalValue > 0 ? (safeSideBreakdown.voo / totalValue) * 100 : 0,
+      currentPct: pct(safeSideBreakdown.voo),
       targetPct: targets.safeSideInner.voo,
-      indent: true,
+      indent: 1,
+      showDeviation: true,
     },
     {
       label: "└ 个股",
       value: safeSideBreakdown.stocks,
-      currentPct: totalValue > 0 ? (safeSideBreakdown.stocks / totalValue) * 100 : 0,
+      currentPct: pct(safeSideBreakdown.stocks),
       targetPct: targets.safeSideInner.stocks,
-      indent: true,
+      indent: 1,
+      showDeviation: true,
     },
+    // Top 4 individual stocks
+    ...topStocks.map((stock) => ({
+      label: `    └ ${stock.symbol}`,
+      value: stock.currentValue,
+      currentPct: pct(stock.currentValue),
+      targetPct: singleStockTargetPct,
+      indent: 2 as number,
+      showDeviation: true,
+    })),
     {
       label: "现金 Cash",
       value: getCategoryValue("cash"),
       currentPct: getCategoryPct("cash"),
       targetPct: targets.cash,
+      indent: 0,
+      showDeviation: true,
     },
     {
       label: "轮转策略 Wheel",
       value: getCategoryValue("wheel"),
       currentPct: getCategoryPct("wheel"),
       targetPct: targets.wheel,
+      indent: 0,
+      showDeviation: true,
     },
     {
       label: "远期期权 LEAPS",
       value: getCategoryValue("leaps"),
       currentPct: getCategoryPct("leaps"),
       targetPct: targets.leaps,
+      indent: 0,
+      showDeviation: true,
     },
   ];
 
@@ -117,15 +142,27 @@ export default function AllocationTable({
         </thead>
         <tbody>
           {rows.map((row, i) => {
-            const deviation = getDeviation(row.currentPct, row.targetPct);
+            const deviation = row.currentPct - row.targetPct;
+            const isTopLevel = row.indent === 0;
+            const isSub = row.indent === 1;
+            const isSubSub = row.indent === 2;
+
             return (
               <tr
                 key={i}
                 className={`border-b border-gray-800 ${
-                  row.indent ? "text-gray-400" : "text-gray-200"
+                  isTopLevel ? "text-gray-200" : "text-gray-400"
                 }`}
               >
-                <td className={`py-3 ${row.indent ? "pl-4" : "font-medium"}`}>
+                <td
+                  className={`py-3 ${
+                    isTopLevel
+                      ? "font-medium"
+                      : isSub
+                      ? "pl-4"
+                      : "pl-8 text-gray-500"
+                  }`}
+                >
                   {row.label}
                 </td>
                 <td className="py-3 text-right font-mono">
@@ -138,11 +175,9 @@ export default function AllocationTable({
                   {row.targetPct.toFixed(1)}%
                 </td>
                 <td
-                  className={`py-3 text-right font-mono ${
-                    row.indent ? "text-gray-500" : deviationColor(deviation)
-                  }`}
+                  className={`py-3 text-right font-mono ${deviationColor(deviation)}`}
                 >
-                  {!row.indent && (
+                  {row.showDeviation && (
                     <>
                       {deviation >= 0 ? "+" : ""}
                       {deviation.toFixed(1)}%

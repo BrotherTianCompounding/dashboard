@@ -15,7 +15,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
-  "safe-side": "安全端 Safe Side",
+  "safe-side": "定投仓 DCA",
   cash: "现金 Cash",
   wheel: "轮转策略 Wheel",
   leaps: "远期期权 LEAPS",

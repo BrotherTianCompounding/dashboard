@@ -7,7 +7,6 @@ interface PortfolioOverviewProps {
   comparison: PortfolioComparison | null;
 }
 
-const INITIAL_CAPITAL = 400_000;
 const TARGET_CAPITAL = 1_000_000;
 
 function formatDollar(value: number): string {
@@ -22,7 +21,7 @@ export default function PortfolioOverview({
   comparison,
 }: PortfolioOverviewProps) {
   const progressPercent = Math.min(
-    ((snapshot.totalValue - INITIAL_CAPITAL) / (TARGET_CAPITAL - INITIAL_CAPITAL)) * 100,
+    (snapshot.totalValue / TARGET_CAPITAL) * 100,
     100
   );
   const remaining = TARGET_CAPITAL - snapshot.totalValue;
@@ -72,7 +71,7 @@ export default function PortfolioOverview({
       {/* Progress Bar: $400K → $1M */}
       <div>
         <div className="flex justify-between text-sm text-gray-400 mb-2">
-          <span>$400K 起点</span>
+          <span>$0</span>
           <span className="text-cyan-400 font-medium">
             {progressPercent.toFixed(1)}% 完成
           </span>

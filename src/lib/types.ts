@@ -61,11 +61,18 @@ export interface TargetAllocation {
   };
 }
 
+/** A top individual stock in the safe-side */
+export interface TopStock {
+  symbol: string;
+  currentValue: number;
+}
+
 /** Full parsed portfolio snapshot */
 export interface PortfolioSnapshot {
   totalValue: number;
   categories: CategorySummary[];
   safeSideBreakdown: SafeSideBreakdown;
+  topStocks: TopStock[];
   date: Date | null;
   fileName: string;
 }
