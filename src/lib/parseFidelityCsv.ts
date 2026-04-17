@@ -19,9 +19,8 @@ export function parseFidelityCsv(csvString: string): FidelityRow[] {
     .filter((row) => {
       const symbol = (row["Symbol"] ?? "").trim();
       if (!symbol) return false;
-      // Filter out "Pending activity" and disclaimer rows
-      const desc = (row["Description"] ?? "").trim();
-      if (desc === "" && symbol === "Pending activity") return false;
+      // Filter out disclaimer/footer rows (but keep Pending activity for total calc)
+      if (symbol.startsWith('"')) return false;
       return true;
     })
     .map((row) => ({

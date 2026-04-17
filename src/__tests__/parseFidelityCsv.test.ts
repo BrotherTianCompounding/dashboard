@@ -46,13 +46,14 @@ Individual,SPAXX**,HELD IN MONEY MARKET,,,,$44600.00,,,11.43%`;
     expect(rows[0].symbol).toBe("SPAXX");
   });
 
-  it("filters out Pending activity rows", () => {
-    const csv = `Account Name,Symbol,Description,Quantity,Last Price,Current Value,Cost Basis Total,Total Gain/Loss Dollar,Percent Of Account
-Individual,VOO,VANGUARD,80,$621.34,$49707.20,$33120.43,$16586.77,12.74%
-Individual,Pending activity,,,,,-$2144.54,,,`;
+  it("keeps Pending activity rows for total calc", () => {
+    const csv = `Account Number,Account Name,Symbol,Description,Quantity,Last Price,Last Price Change,Current Value,Today's Gain/Loss Dollar,Today's Gain/Loss Percent,Total Gain/Loss Dollar,Total Gain/Loss Percent,Percent Of Account,Cost Basis Total,Average Cost Basis,Type
+X123,Individual,VOO,VANGUARD,80,$621.34,+$15.30,$49707.20,+$1224.00,+2.52%,+$16586.77,+50.08%,12.74%,$33120.43,$414.01,Margin,
+X123,Individual,Pending activity,,,,,-$2144.54,,,,,,,,,`;
     const rows = parseFidelityCsv(csv);
-    expect(rows).toHaveLength(1);
-    expect(rows[0].symbol).toBe("VOO");
+    expect(rows).toHaveLength(2);
+    expect(rows[1].symbol).toBe("Pending activity");
+    expect(rows[1].currentValue).toBe(-2144.54);
   });
 });
 

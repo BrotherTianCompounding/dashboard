@@ -15,27 +15,9 @@ import type {
   SafeSideBreakdown,
 } from "../lib/types";
 
-/**
- * Calculate total account value using Fidelity's Percent Of Account field.
- * Method: pick large holdings, compute currentValue / (percentOfAccount/100),
- * then average for accuracy.
- */
-function calcTotalFromPercent(rows: FidelityRow[]): number {
-  const estimates: number[] = [];
-  for (const row of rows) {
-    // Only use rows with meaningful percent and positive current value
-    if (row.percentOfAccount > 1 && row.currentValue > 0) {
-      estimates.push(row.currentValue / (row.percentOfAccount / 100));
-    }
-  }
-  if (estimates.length === 0) {
-    // Fallback: sum all current values
-    return rows.reduce((sum, r) => sum + r.currentValue, 0);
-  }
-  // Average the top 3 largest estimates for stability
-  estimates.sort((a, b) => b - a);
-  const top = estimates.slice(0, Math.min(3, estimates.length));
-  return top.reduce((sum, v) => sum + v, 0) / top.length;
+/** Calculate total account value by summing all Current Value entries */
+function calcTotal(rows: FidelityRow[]): number {
+  return rows.reduce((sum, r) => sum + r.currentValue, 0);
 }
 
 function buildSnapshot(
@@ -43,8 +25,12 @@ function buildSnapshot(
   fileName: string,
   date: Date | null
 ): PortfolioSnapshot {
-  const classified = classifyHoldings(rows);
-  const totalValue = calcTotalFromPercent(rows);
+  // Total includes everything (including Pending activity) for accuracy
+  const totalValue = calcTotal(rows);
+  // Classify only real holdings (exclude Pending activity)
+  const classified = classifyHoldings(
+    rows.filter((r) => r.symbol !== "Pending activity")
+  );
 
   const categoryMap = new Map<string, CategorySummary>();
   for (const h of classified) {
