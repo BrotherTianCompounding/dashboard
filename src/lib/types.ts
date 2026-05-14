@@ -32,28 +32,12 @@ export interface ClassifiedHolding {
   safeSideSubCategory?: SafeSideSubCategory;
 }
 
-/** Aggregated totals per category */
-export interface CategorySummary {
-  category: HoldingCategory;
-  totalValue: number;
-  percentOfPortfolio: number;
-  holdings: ClassifiedHolding[];
-}
-
-/** Safe-side breakdown */
-export interface SafeSideBreakdown {
-  qqqm: number;
-  voo: number;
-  stocks: number;
-}
-
 /** Target allocation percentages */
 export interface TargetAllocation {
   safeSide: number;
   cash: number;
   wheel: number;
   leaps: number;
-  /** Inner safe-side targets as % of total portfolio */
   safeSideInner: {
     qqqm: number;
     voo: number;
@@ -61,18 +45,32 @@ export interface TargetAllocation {
   };
 }
 
-/** A top individual stock in the safe-side */
-export interface TopStock {
-  symbol: string;
-  currentValue: number;
+/** A single item inside a bucket (e.g., one stock within DCA, or "Sell Put" within Options) */
+export interface BucketItem {
+  label: string;
+  value: number;
+  /** Current % within this bucket (0-100) */
+  currentPctOfBucket: number;
+  /** Target % within this bucket (0-100) */
+  targetPctOfBucket: number;
+}
+
+/** A high-level bucket (定投仓 / 现金仓 / 期权仓) */
+export interface BucketData {
+  key: "safe-side" | "cash" | "options";
+  label: string;
+  totalValue: number;
+  /** Current % of overall portfolio (0-100) */
+  currentPctOfTotal: number;
+  /** Target % of overall portfolio (0-100) */
+  targetPctOfTotal: number;
+  items: BucketItem[];
 }
 
 /** Full parsed portfolio snapshot */
 export interface PortfolioSnapshot {
   totalValue: number;
-  categories: CategorySummary[];
-  safeSideBreakdown: SafeSideBreakdown;
-  topStocks: TopStock[];
+  buckets: BucketData[];
   date: Date | null;
   fileName: string;
 }

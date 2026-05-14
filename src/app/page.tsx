@@ -3,19 +3,18 @@
 import { useState, useCallback } from "react";
 import UploadZone from "../components/UploadZone";
 import PortfolioOverview from "../components/PortfolioOverview";
-import AllocationChart from "../components/AllocationChart";
-import AllocationTable from "../components/AllocationTable";
+import BucketCard from "../components/BucketCard";
 import { classifyHoldings } from "../lib/classifyHoldings";
 import { calculateTargets } from "../lib/calculateTargets";
 import type {
   FidelityRow,
   PortfolioSnapshot,
   PortfolioComparison,
-  CategorySummary,
-  SafeSideBreakdown,
+  BucketData,
+  BucketItem,
 } from "../lib/types";
 
-/** Calculate total account value by summing all Current Value entries */
+/** Sum all current values (incl. Pending activity for accurate total) */
 function calcTotal(rows: FidelityRow[]): number {
   return rows.reduce((sum, r) => sum + r.currentValue, 0);
 }
@@ -25,89 +24,150 @@ function buildSnapshot(
   fileName: string,
   date: Date | null
 ): PortfolioSnapshot {
-  // Total includes everything (including Pending activity) for accuracy
   const totalValue = calcTotal(rows);
-  // Classify only real holdings (exclude Pending activity)
   const classified = classifyHoldings(
     rows.filter((r) => r.symbol !== "Pending activity")
   );
+  const targets = calculateTargets(38, true);
 
-  const categoryMap = new Map<string, CategorySummary>();
-  for (const h of classified) {
-    // Use actual currentValue (negative for short options is correct)
-    const value = h.currentValue;
-    const existing = categoryMap.get(h.category);
-    if (existing) {
-      existing.totalValue += value;
-      existing.holdings.push(h);
-    } else {
-      categoryMap.set(h.category, {
-        category: h.category,
-        totalValue: value,
-        percentOfPortfolio: 0,
-        holdings: [h],
-      });
+  const pct = (numerator: number, denom: number) =>
+    denom > 0 ? (numerator / denom) * 100 : 0;
+
+  // ===== Safe Side bucket =====
+  const safeSideHoldings = classified.filter((h) => h.category === "safe-side");
+  const safeSideValue = safeSideHoldings.reduce(
+    (s, h) => s + h.currentValue,
+    0
+  );
+
+  // Aggregate by symbol (same symbol may appear in multiple rows)
+  const safeSideBySymbol = new Map<string, number>();
+  for (const h of safeSideHoldings) {
+    safeSideBySymbol.set(
+      h.symbol,
+      (safeSideBySymbol.get(h.symbol) ?? 0) + h.currentValue
+    );
+  }
+  const ETF_TICKERS = new Set([
+    "QQQM",
+    "QQQ",
+    "QLD",
+    "VGT",
+    "VOO",
+    "SPY",
+    "FXAIX",
+  ]);
+  const safeSideItems: BucketItem[] = Array.from(safeSideBySymbol.entries())
+    .map(([symbol, value]) => ({
+      label: symbol,
+      value,
+      currentPctOfBucket: pct(value, safeSideValue),
+      // Target: ETFs (QQQM/VOO etc) get 30% target, individual stocks get 10% cap
+      targetPctOfBucket: ETF_TICKERS.has(symbol) ? 30 : 10,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5);
+
+  // ===== Cash bucket =====
+  const cashHoldings = classified.filter((h) => h.category === "cash");
+  const cashValue = cashHoldings.reduce((s, h) => s + h.currentValue, 0);
+
+  // ===== Options bucket (wheel + leaps combined) =====
+  const optionsHoldings = classified.filter(
+    (h) => h.category === "wheel" || h.category === "leaps"
+  );
+  // Use absolute values for bucket size (short options have negative values)
+  const optionsValue = optionsHoldings.reduce(
+    (s, h) => s + Math.abs(h.currentValue),
+    0
+  );
+
+  let sellPutValue = 0;
+  let sellCallValue = 0;
+  let leapsValue = 0;
+  for (const h of optionsHoldings) {
+    if (h.category === "leaps") {
+      leapsValue += Math.abs(h.currentValue);
+    } else if (/\bPUT\b/i.test(h.description) && h.quantity < 0) {
+      sellPutValue += Math.abs(h.currentValue);
+    } else if (/\bCALL\b/i.test(h.description) && h.quantity < 0) {
+      sellCallValue += Math.abs(h.currentValue);
     }
   }
+  const optionsItems: BucketItem[] = [
+    {
+      label: "Sell Put",
+      value: sellPutValue,
+      currentPctOfBucket: pct(sellPutValue, optionsValue),
+      targetPctOfBucket: 40, // half of Wheel (80% of options)
+    },
+    {
+      label: "Sell Call",
+      value: sellCallValue,
+      currentPctOfBucket: pct(sellCallValue, optionsValue),
+      targetPctOfBucket: 40,
+    },
+    {
+      label: "LEAPS Call",
+      value: leapsValue,
+      currentPctOfBucket: pct(leapsValue, optionsValue),
+      targetPctOfBucket: 20,
+    },
+    {
+      label: "现金",
+      value: 0,
+      currentPctOfBucket: 0,
+      targetPctOfBucket: 0,
+    },
+  ];
 
-  const categories = Array.from(categoryMap.values()).map((cat) => ({
-    ...cat,
-    // Use absolute value for percentage calculation (short options have negative values)
-    totalValue: Math.abs(cat.totalValue),
-    percentOfPortfolio: totalValue > 0 ? (Math.abs(cat.totalValue) / totalValue) * 100 : 0,
-  }));
+  const buckets: BucketData[] = [
+    {
+      key: "safe-side",
+      label: "定投仓 DCA",
+      totalValue: safeSideValue,
+      currentPctOfTotal: pct(safeSideValue, totalValue),
+      targetPctOfTotal: targets.safeSide,
+      items: safeSideItems,
+    },
+    {
+      key: "cash",
+      label: "现金仓 Cash",
+      totalValue: cashValue,
+      currentPctOfTotal: pct(cashValue, totalValue),
+      targetPctOfTotal: targets.cash,
+      items: [],
+    },
+    {
+      key: "options",
+      label: "期权仓 Options",
+      totalValue: optionsValue,
+      currentPctOfTotal: pct(optionsValue, totalValue),
+      targetPctOfTotal: targets.wheel + targets.leaps,
+      items: optionsItems,
+    },
+  ];
 
-  const safeSideHoldings = classified.filter((h) => h.category === "safe-side");
-  const safeSideBreakdown: SafeSideBreakdown = {
-    qqqm: safeSideHoldings
-      .filter((h) => h.safeSideSubCategory === "qqqm")
-      .reduce((sum, h) => sum + h.currentValue, 0),
-    voo: safeSideHoldings
-      .filter((h) => h.safeSideSubCategory === "voo")
-      .reduce((sum, h) => sum + h.currentValue, 0),
-    stocks: safeSideHoldings
-      .filter((h) => h.safeSideSubCategory === "stocks")
-      .reduce((sum, h) => sum + h.currentValue, 0),
-  };
-
-  // Top 4 individual stocks by value (excluding QQQM, VOO, SPY, FXAIX)
-  const EXCLUDE_FROM_TOP = new Set(["QQQM", "VOO", "SPY", "FXAIX"]);
-  const stockHoldings = safeSideHoldings
-    .filter((h) => h.safeSideSubCategory === "stocks" && !EXCLUDE_FROM_TOP.has(h.symbol));
-  // Merge duplicate symbols (e.g. QQQM appearing twice in CSV)
-  const stockMap = new Map<string, number>();
-  for (const h of stockHoldings) {
-    stockMap.set(h.symbol, (stockMap.get(h.symbol) ?? 0) + h.currentValue);
-  }
-  const topStocks = Array.from(stockMap.entries())
-    .map(([symbol, currentValue]) => ({ symbol, currentValue }))
-    .sort((a, b) => b.currentValue - a.currentValue)
-    .slice(0, 4);
-
-  return { totalValue, categories, safeSideBreakdown, topStocks, date, fileName };
+  return { totalValue, buckets, date, fileName };
 }
 
 export default function Home() {
   const [current, setCurrent] = useState<PortfolioSnapshot | null>(null);
-  const [comparison, setComparison] = useState<PortfolioComparison | null>(null);
-  const targets = calculateTargets(38, true);
+  const [comparison, setComparison] = useState<PortfolioComparison | null>(
+    null
+  );
 
   const handleFilesReady = useCallback(
-    (
-      files: { name: string; date: Date | null; rows: FidelityRow[] }[]
-    ) => {
+    (files: { name: string; date: Date | null; rows: FidelityRow[] }[]) => {
       if (files.length === 0) {
         setCurrent(null);
         setComparison(null);
         return;
       }
-
       if (files.length === 1) {
-        const snapshot = buildSnapshot(files[0].rows, files[0].name, files[0].date);
-        setCurrent(snapshot);
+        setCurrent(buildSnapshot(files[0].rows, files[0].name, files[0].date));
         setComparison(null);
       } else {
-        // files[0] = older (previous), files[1] = newer (current)
         const prev = buildSnapshot(files[0].rows, files[0].name, files[0].date);
         const curr = buildSnapshot(files[1].rows, files[1].name, files[1].date);
         setCurrent(curr);
@@ -127,9 +187,7 @@ export default function Home() {
 
   return (
     <main className="max-w-6xl mx-auto px-6 py-10">
-      <h1 className="text-3xl font-bold text-cyan-400 mb-1">
-        天哥投资仪表盘
-      </h1>
+      <h1 className="text-3xl font-bold text-cyan-400 mb-1">天哥投资仪表盘</h1>
       <p className="text-gray-500 mb-8">百万之路 — Portfolio Dashboard</p>
 
       <UploadZone onFilesReady={handleFilesReady} />
@@ -147,28 +205,13 @@ export default function Home() {
       )}
 
       {current && (
-        <div className="animate-fade-in" style={{ animationDelay: "0.2s", opacity: 0 }}>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-[#1a1f2e] rounded-xl p-6">
-              <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
-                资产分配 Asset Allocation
-              </h2>
-              <AllocationChart categories={current.categories} />
-            </div>
-            <div className="bg-[#1a1f2e] rounded-xl p-6">
-              <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
-                当前 vs 目标 Current vs Target
-              </h2>
-              <AllocationTable
-                categories={current.categories}
-                safeSideBreakdown={current.safeSideBreakdown}
-                targets={targets}
-                totalValue={current.totalValue}
-                comparison={comparison}
-                topStocks={current.topStocks}
-              />
-            </div>
-          </div>
+        <div
+          className="animate-fade-in space-y-6"
+          style={{ animationDelay: "0.2s", opacity: 0 }}
+        >
+          {current.buckets.map((bucket) => (
+            <BucketCard key={bucket.key} bucket={bucket} />
+          ))}
         </div>
       )}
     </main>
