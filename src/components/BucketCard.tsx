@@ -37,6 +37,7 @@ interface BucketCardProps {
 
 export default function BucketCard({ bucket }: BucketCardProps) {
   const isCash = bucket.key === "cash";
+  const isNarrow = isCash;
 
   // Pie chart data: bucket items, or single slice for cash
   const pieData =
@@ -56,9 +57,8 @@ export default function BucketCard({ bucket }: BucketCardProps) {
           },
         ];
 
-  // Normalize bars: scale to max bar value or target for visibility
   const maxBarPct = Math.max(
-    100, // ensure at least 100% reference
+    100,
     ...bucket.items.map((i) =>
       Math.max(i.currentPctOfBucket, i.targetPctOfBucket)
     )
@@ -69,24 +69,80 @@ export default function BucketCard({ bucket }: BucketCardProps) {
     bucket.targetPctOfTotal
   );
 
+  // ===== Narrow variant (cash bucket: pie + big % + status text below) =====
+  if (isNarrow) {
+    return (
+      <div className="bg-[#1a1f2e] rounded-xl p-5 flex flex-col items-center">
+        <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4 self-start">
+          {bucket.label}
+        </h2>
+        <div className="w-[140px] h-[140px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                innerRadius={36}
+                outerRadius={66}
+                paddingAngle={2}
+                dataKey="value"
+                animationDuration={800}
+              >
+                {pieData.map((entry, idx) => (
+                  <Cell key={idx} fill={entry.color} stroke="none" />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="text-center mt-2">
+          <p
+            className={`text-5xl font-black tracking-tight ${titleColor}`}
+            style={{ fontFamily: "Inter, system-ui, sans-serif" }}
+          >
+            {bucket.currentPctOfTotal.toFixed(1)}
+            <span className="text-2xl">%</span>
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            目标 {bucket.targetPctOfTotal.toFixed(1)}%
+          </p>
+          <p className="text-lg text-gray-300 mt-2 font-mono">
+            {formatDollar(bucket.totalValue)}
+          </p>
+          <p className={`text-sm font-semibold mt-3 ${titleColor}`}>
+            {/* cash bucket is capped at target by splitCash — "over target" case is unreachable */}
+            {bucket.currentPctOfTotal < bucket.targetPctOfTotal - 1
+              ? "现金略低目标"
+              : "现金在目标范围"}
+          </p>
+          <p className="text-xs text-gray-600 mt-1 max-w-[180px]">
+            超额现金已自动计入期权仓
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== Wide variant (DCA / Options: pie left + bars right) =====
   return (
-    <div className="bg-[#1a1f2e] rounded-xl p-6">
+    <div className="bg-[#1a1f2e] rounded-xl p-5">
       <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
         {bucket.label}
       </h2>
 
-      <div className="flex flex-col lg:flex-row gap-8 items-center lg:items-start">
+      <div className="flex flex-row gap-5 items-start">
         {/* Left: Pie chart + big percentage */}
         <div className="flex flex-col items-center flex-shrink-0">
-          <div className="w-[200px] h-[200px]">
+          <div className="w-[140px] h-[140px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={pieData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={90}
+                  innerRadius={36}
+                  outerRadius={66}
                   paddingAngle={2}
                   dataKey="value"
                   animationDuration={800}
@@ -98,91 +154,70 @@ export default function BucketCard({ bucket }: BucketCardProps) {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="text-center mt-2 min-w-[200px]">
+          <div className="text-center mt-2 min-w-[140px]">
             <p
-              className={`text-6xl font-black tracking-tight ${titleColor}`}
+              className={`text-5xl font-black tracking-tight ${titleColor}`}
               style={{ fontFamily: "Inter, system-ui, sans-serif" }}
             >
               {bucket.currentPctOfTotal.toFixed(1)}
-              <span className="text-3xl">%</span>
+              <span className="text-2xl">%</span>
             </p>
             <p className="text-xs text-gray-500 mt-1">
               目标 {bucket.targetPctOfTotal.toFixed(1)}%
             </p>
-            <p className="text-xl text-gray-300 mt-2 font-mono">
+            <p className="text-lg text-gray-300 mt-2 font-mono">
               {formatDollar(bucket.totalValue)}
             </p>
           </div>
         </div>
 
-        {/* Right: Bar chart or descriptive text (for cash) */}
-        <div className="flex-1 min-w-0 w-full">
-          {isCash ? (
-            <div className="h-full flex flex-col items-center justify-center text-center py-8">
-              <p className={`text-2xl font-semibold ${titleColor}`}>
-                {bucket.currentPctOfTotal > bucket.targetPctOfTotal + 1
-                  ? "现金略超目标"
-                  : bucket.currentPctOfTotal < bucket.targetPctOfTotal - 1
-                  ? "现金略低目标"
-                  : "现金在目标范围"}
-              </p>
-              <p className="text-sm text-gray-500 mt-3">
-                目标 {bucket.targetPctOfTotal.toFixed(0)}% · 当前{" "}
-                {bucket.currentPctOfTotal.toFixed(1)}%
-              </p>
-              <p className="text-xs text-gray-600 mt-1">
-                SPAXX 货币市场基金，为期权策略提供弹药
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4 mt-1">
-              {bucket.items.map((item, idx) => {
-                const widthPct =
-                  maxBarPct > 0
-                    ? Math.min((item.currentPctOfBucket / maxBarPct) * 100, 100)
-                    : 0;
-                return (
-                  <div key={idx}>
-                    <div className="flex items-center gap-3 mb-1">
-                      <span className="text-sm font-medium text-gray-300 w-24 truncate">
-                        {item.label}
-                      </span>
-                      <span className="ml-auto text-sm font-mono whitespace-nowrap">
-                        <span
-                          className={
-                            item.currentPctOfBucket > item.targetPctOfBucket + 3
-                              ? "text-yellow-400"
-                              : item.currentPctOfBucket <
-                                item.targetPctOfBucket - 3
-                              ? "text-blue-400"
-                              : "text-green-400"
-                          }
-                        >
-                          {item.currentPctOfBucket.toFixed(1)}%
-                        </span>
-                        <span className="text-gray-500">
-                          {" "}
-                          ({item.targetPctOfBucket.toFixed(0)}%)
-                        </span>
-                      </span>
-                      <span className="text-sm font-mono text-gray-400 whitespace-nowrap w-28 text-right">
-                        {formatDollar(item.value)}
-                      </span>
-                    </div>
-                    <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full ${barColorClass(
-                          item.currentPctOfBucket,
-                          item.targetPctOfBucket
-                        )} transition-all duration-700 ease-out rounded-full`}
-                        style={{ width: `${widthPct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+        {/* Right: Bar chart */}
+        <div className="flex-1 min-w-0 space-y-3 mt-1">
+          {bucket.items.map((item, idx) => {
+            const widthPct =
+              maxBarPct > 0
+                ? Math.min((item.currentPctOfBucket / maxBarPct) * 100, 100)
+                : 0;
+            return (
+              <div key={idx}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-medium text-gray-300 w-16 truncate">
+                    {item.label}
+                  </span>
+                  <span className="ml-auto text-xs font-mono whitespace-nowrap">
+                    <span
+                      className={
+                        item.currentPctOfBucket > item.targetPctOfBucket + 3
+                          ? "text-yellow-400"
+                          : item.currentPctOfBucket <
+                            item.targetPctOfBucket - 3
+                          ? "text-blue-400"
+                          : "text-green-400"
+                      }
+                    >
+                      {item.currentPctOfBucket.toFixed(1)}%
+                    </span>
+                    <span className="text-gray-500">
+                      {" "}
+                      ({item.targetPctOfBucket.toFixed(0)}%)
+                    </span>
+                  </span>
+                  <span className="text-xs font-mono text-gray-400 whitespace-nowrap w-20 text-right">
+                    {formatDollar(item.value)}
+                  </span>
+                </div>
+                <div className="h-2.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full ${barColorClass(
+                      item.currentPctOfBucket,
+                      item.targetPctOfBucket
+                    )} transition-all duration-700 ease-out rounded-full`}
+                    style={{ width: `${widthPct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
