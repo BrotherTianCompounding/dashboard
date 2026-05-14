@@ -1,5 +1,6 @@
 import { classifyHoldings } from "./classifyHoldings";
 import { calculateTargets } from "./calculateTargets";
+import { splitCash } from "./splitCash";
 import type {
   FidelityRow,
   PortfolioSnapshot,
@@ -61,19 +62,24 @@ export function buildSnapshot(
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
 
-  // ===== Cash bucket =====
+  // ===== Cash bucket (capped at target; excess flows to options) =====
   const cashHoldings = classified.filter((h) => h.category === "cash");
-  const cashValue = cashHoldings.reduce((s, h) => s + h.currentValue, 0);
+  const totalCash = cashHoldings.reduce((s, h) => s + h.currentValue, 0);
+  const { cashBucket: cashValue, optionsExcessCash } = splitCash({
+    totalCash,
+    totalValue,
+    cashTargetPct: targets.cash,
+  });
 
-  // ===== Options bucket (wheel + leaps combined) =====
+  // ===== Options bucket (positions + excess cash) =====
   const optionsHoldings = classified.filter(
     (h) => h.category === "wheel" || h.category === "leaps"
   );
-  // Use absolute values for bucket size (short options have negative values)
-  const optionsValue = optionsHoldings.reduce(
+  const optionsPositionsValue = optionsHoldings.reduce(
     (s, h) => s + Math.abs(h.currentValue),
     0
   );
+  const optionsValue = optionsPositionsValue + optionsExcessCash;
 
   let sellPutValue = 0;
   let sellCallValue = 0;
@@ -108,8 +114,8 @@ export function buildSnapshot(
     },
     {
       label: "现金",
-      value: 0,
-      currentPctOfBucket: 0,
+      value: optionsExcessCash,
+      currentPctOfBucket: pct(optionsExcessCash, optionsValue),
       targetPctOfBucket: 0,
     },
   ];
