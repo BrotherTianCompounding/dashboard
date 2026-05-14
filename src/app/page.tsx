@@ -46,7 +46,7 @@ export default function Home() {
   );
 
   return (
-    <main className="max-w-6xl mx-auto px-6 py-10">
+    <main className="max-w-7xl mx-auto px-6 py-10">
       <h1 className="text-3xl font-bold text-cyan-400 mb-1">天哥投资仪表盘</h1>
       <p className="text-gray-500 mb-8">百万之路 — Portfolio Dashboard</p>
 
@@ -66,7 +66,7 @@ export default function Home() {
 
       {current && (
         <div
-          className="animate-fade-in space-y-6"
+          className="grid grid-cols-1 md:grid-cols-[2.5fr_1fr_2.5fr] gap-4 animate-fade-in"
           style={{ animationDelay: "0.2s", opacity: 0 }}
         >
           {current.buckets.map((bucket) => (
