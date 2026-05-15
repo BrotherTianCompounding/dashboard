@@ -96,6 +96,28 @@ describe("buildSnapshot — ETF grouping in DCA bar", () => {
     expect(dca.items.find((i) => i.label === "QQQM")!.targetPctOfBucket).toBe(30);
     expect(dca.items.find((i) => i.label === "NVDA")!.targetPctOfBucket).toBe(10);
   });
+
+  it("handles mixed ETF families + individual stocks together, sorted by value", () => {
+    const rows: FidelityRow[] = [
+      // QQQM family → merges to "QQQM", total 30000
+      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 20000 }),
+      row({ symbol: "VGT", description: "VANGUARD INFO TECH ETF", quantity: 10, currentValue: 10000 }),
+      // VOO family → merges to "VOO", total 15000
+      row({ symbol: "VOO", description: "VANGUARD S&P 500 ETF", quantity: 10, currentValue: 9000 }),
+      row({ symbol: "SPY", description: "SPDR S&P 500 ETF TRUST", quantity: 5, currentValue: 6000 }),
+      // individual stocks, own symbols
+      row({ symbol: "NVDA", description: "NVIDIA CORP", quantity: 10, currentValue: 8000 }),
+      row({ symbol: "AAPL", description: "APPLE INC", quantity: 20, currentValue: 3000 }),
+    ];
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
+    const dca = snap.buckets.find((b) => b.key === "safe-side")!;
+
+    // 4 display rows: QQQM(30000), VOO(15000), NVDA(8000), AAPL(3000), sorted desc by value
+    expect(dca.items.map((i) => i.label)).toEqual(["QQQM", "VOO", "NVDA", "AAPL"]);
+    expect(dca.items.map((i) => i.value)).toEqual([30000, 15000, 8000, 3000]);
+    // ETF groups get 30% target, individual stocks 10%
+    expect(dca.items.map((i) => i.targetPctOfBucket)).toEqual([30, 30, 10, 10]);
+  });
 });
 
 describe("buildSnapshot — options bucket (no cash)", () => {
