@@ -120,7 +120,7 @@ export default function BucketCard({ bucket }: BucketCardProps) {
               : "现金在目标范围"}
           </p>
           <p className="text-xs text-gray-600 mt-2 max-w-[200px]">
-            最低现金仓位目标 5%（如果没有收入就是10%），多余现金可用于期权 sell put
+            多余现金用于期权 sell put。VIX小于15时可适当增加现金仓位。
           </p>
         </div>
       </div>
