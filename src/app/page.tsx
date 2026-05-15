@@ -1,49 +1,73 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import UploadZone from "../components/UploadZone";
 import PortfolioOverview from "../components/PortfolioOverview";
 import BucketCard from "../components/BucketCard";
+import SettingsCard from "../components/SettingsCard";
 import { buildSnapshot } from "../lib/buildSnapshot";
 import type {
   FidelityRow,
-  PortfolioSnapshot,
   PortfolioComparison,
 } from "../lib/types";
 
-export default function Home() {
-  const [current, setCurrent] = useState<PortfolioSnapshot | null>(null);
-  const [comparison, setComparison] = useState<PortfolioComparison | null>(
-    null
-  );
+type UploadedFile = { name: string; date: Date | null; rows: FidelityRow[] };
 
-  const handleFilesReady = useCallback(
-    (files: { name: string; date: Date | null; rows: FidelityRow[] }[]) => {
-      if (files.length === 0) {
-        setCurrent(null);
-        setComparison(null);
-        return;
-      }
-      if (files.length === 1) {
-        setCurrent(buildSnapshot(files[0].rows, files[0].name, files[0].date, 25, true));
-        setComparison(null);
-      } else {
-        const prev = buildSnapshot(files[0].rows, files[0].name, files[0].date, 25, true);
-        const curr = buildSnapshot(files[1].rows, files[1].name, files[1].date, 25, true);
-        setCurrent(curr);
-        setComparison({
-          current: curr,
-          previous: prev,
-          valueDelta: curr.totalValue - prev.totalValue,
-          valueDeltaPercent:
-            prev.totalValue > 0
-              ? ((curr.totalValue - prev.totalValue) / prev.totalValue) * 100
-              : 0,
-        });
-      }
-    },
-    []
-  );
+export default function Home() {
+  const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [age, setAge] = useState(25);
+  const [hasIncome, setHasIncome] = useState(true);
+
+  const handleFilesReady = useCallback((f: UploadedFile[]) => {
+    setFiles(f);
+  }, []);
+
+  const { current, comparison } = useMemo<{
+    current: ReturnType<typeof buildSnapshot> | null;
+    comparison: PortfolioComparison | null;
+  }>(() => {
+    if (files.length === 0) {
+      return { current: null, comparison: null };
+    }
+    if (files.length === 1) {
+      return {
+        current: buildSnapshot(
+          files[0].rows,
+          files[0].name,
+          files[0].date,
+          age,
+          hasIncome
+        ),
+        comparison: null,
+      };
+    }
+    const prev = buildSnapshot(
+      files[0].rows,
+      files[0].name,
+      files[0].date,
+      age,
+      hasIncome
+    );
+    const curr = buildSnapshot(
+      files[1].rows,
+      files[1].name,
+      files[1].date,
+      age,
+      hasIncome
+    );
+    return {
+      current: curr,
+      comparison: {
+        current: curr,
+        previous: prev,
+        valueDelta: curr.totalValue - prev.totalValue,
+        valueDeltaPercent:
+          prev.totalValue > 0
+            ? ((curr.totalValue - prev.totalValue) / prev.totalValue) * 100
+            : 0,
+      },
+    };
+  }, [files, age, hasIncome]);
 
   return (
     <main className="max-w-7xl mx-auto px-6 py-10">
@@ -51,6 +75,13 @@ export default function Home() {
       <p className="text-gray-500 mb-8">百万之路 — Portfolio Dashboard</p>
 
       <UploadZone onFilesReady={handleFilesReady} />
+
+      <SettingsCard
+        age={age}
+        hasIncome={hasIncome}
+        onAgeChange={setAge}
+        onIncomeChange={setHasIncome}
+      />
 
       {!current && (
         <div className="text-center text-gray-600 py-20">
