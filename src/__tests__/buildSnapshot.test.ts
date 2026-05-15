@@ -23,7 +23,7 @@ describe("buildSnapshot (baseline behavior)", () => {
       row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 5000, currentValue: 5000 }),
       row({ symbol: "Pending activity", description: "PENDING", quantity: 0, currentValue: 100 }),
     ];
-    const snap = buildSnapshot(rows, "test.csv", null);
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     expect(snap.totalValue).toBeCloseTo(30100);
   });
 
@@ -31,110 +31,158 @@ describe("buildSnapshot (baseline behavior)", () => {
     const rows: FidelityRow[] = [
       row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 25000 }),
     ];
-    const snap = buildSnapshot(rows, "test.csv", null);
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     expect(snap.buckets.map((b) => b.key)).toEqual(["safe-side", "cash", "options"]);
   });
 
-  it("cash bucket is capped at target value (post-split behavior)", () => {
-    // totalValue=60000, age=38+income → cash target=5% → target value=3000
-    // totalCash=10000 → cash bucket=3000 (capped), excess=7000
+  it("cash bucket equals sum of all cash holdings (uncapped)", () => {
+    // totalValue=60000, cash target 5% would be 3000 — but cash is NOT capped
     const rows: FidelityRow[] = [
       row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 50000 }),
       row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 10000, currentValue: 10000 }),
     ];
-    const snap = buildSnapshot(rows, "test.csv", null);
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const cash = snap.buckets.find((b) => b.key === "cash")!;
-    expect(cash.totalValue).toBeCloseTo(3000);
+    expect(cash.totalValue).toBeCloseTo(10000);
   });
 });
 
-describe("buildSnapshot — cash split (new behavior)", () => {
-  it("cash < target: cash bucket gets all cash, options gets no excess", () => {
-    // totalValue=100000, age=38+income → cash target=5% → target value=5000
-    // totalCash=3000 → bucket=3000, options excess=0
+describe("buildSnapshot — ETF grouping in DCA bar", () => {
+  it("merges qqqm-family tickers (QQQM/QQQ/QLD/VGT) into a single QQQM row", () => {
     const rows: FidelityRow[] = [
-      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 97000 }),
-      row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 3000, currentValue: 3000 }),
+      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 10000 }),
+      row({ symbol: "QQQ", description: "INVESCO QQQ TRUST", quantity: 50, currentValue: 8000 }),
+      row({ symbol: "QLD", description: "PROSHARES ULTRA QQQ", quantity: 20, currentValue: 4000 }),
+      row({ symbol: "VGT", description: "VANGUARD INFO TECH ETF", quantity: 10, currentValue: 3000 }),
     ];
-    const snap = buildSnapshot(rows, "test.csv", null);
-    const cash = snap.buckets.find((b) => b.key === "cash")!;
-    const options = snap.buckets.find((b) => b.key === "options")!;
-    const cashItem = options.items.find((i) => i.label === "现金")!;
-
-    expect(cash.totalValue).toBeCloseTo(3000);
-    expect(cashItem.value).toBeCloseTo(0);
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
+    const dca = snap.buckets.find((b) => b.key === "safe-side")!;
+    const qqqmItems = dca.items.filter((i) => i.label === "QQQM");
+    expect(qqqmItems).toHaveLength(1);
+    expect(qqqmItems[0].value).toBeCloseTo(25000);
   });
 
-  it("cash > target: cash bucket capped, excess goes to options 现金 item", () => {
-    // totalValue=100000, target=5%=5000
-    // totalCash=7000 → bucket=5000, options 现金=2000
+  it("merges voo-family tickers (VOO/SPY/FXAIX) into a single VOO row", () => {
     const rows: FidelityRow[] = [
-      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 93000 }),
+      row({ symbol: "VOO", description: "VANGUARD S&P 500 ETF", quantity: 10, currentValue: 5000 }),
+      row({ symbol: "SPY", description: "SPDR S&P 500 ETF TRUST", quantity: 5, currentValue: 3000 }),
+      row({ symbol: "FXAIX", description: "FIDELITY 500 INDEX FUND", quantity: 100, currentValue: 2000 }),
+    ];
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
+    const dca = snap.buckets.find((b) => b.key === "safe-side")!;
+    const vooItems = dca.items.filter((i) => i.label === "VOO");
+    expect(vooItems).toHaveLength(1);
+    expect(vooItems[0].value).toBeCloseTo(10000);
+  });
+
+  it("keeps individual stocks under their own symbol", () => {
+    const rows: FidelityRow[] = [
+      row({ symbol: "NVDA", description: "NVIDIA CORP", quantity: 10, currentValue: 5000 }),
+      row({ symbol: "AAPL", description: "APPLE INC", quantity: 20, currentValue: 4000 }),
+    ];
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
+    const dca = snap.buckets.find((b) => b.key === "safe-side")!;
+    const labels = dca.items.map((i) => i.label).sort();
+    expect(labels).toEqual(["AAPL", "NVDA"]);
+  });
+
+  it("assigns 30% target to ETF groups, 10% to individual stocks", () => {
+    const rows: FidelityRow[] = [
+      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 10000 }),
+      row({ symbol: "NVDA", description: "NVIDIA CORP", quantity: 10, currentValue: 5000 }),
+    ];
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
+    const dca = snap.buckets.find((b) => b.key === "safe-side")!;
+    expect(dca.items.find((i) => i.label === "QQQM")!.targetPctOfBucket).toBe(30);
+    expect(dca.items.find((i) => i.label === "NVDA")!.targetPctOfBucket).toBe(10);
+  });
+});
+
+describe("buildSnapshot — options bucket (no cash)", () => {
+  it("options bucket has exactly 3 items: Sell Put, Sell Call, LEAPS Call", () => {
+    const rows: FidelityRow[] = [
       row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 7000, currentValue: 7000 }),
     ];
-    const snap = buildSnapshot(rows, "test.csv", null);
-    const cash = snap.buckets.find((b) => b.key === "cash")!;
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const options = snap.buckets.find((b) => b.key === "options")!;
-    const cashItem = options.items.find((i) => i.label === "现金")!;
-
-    expect(cash.totalValue).toBeCloseTo(5000);
-    expect(cashItem.value).toBeCloseTo(2000);
+    expect(options.items.map((i) => i.label)).toEqual([
+      "Sell Put",
+      "Sell Call",
+      "LEAPS Call",
+    ]);
   });
 
-  it("options bucket value includes excess cash", () => {
-    // totalValue=100000, target=5%=5000
-    // totalCash=7000 → options excess=2000
-    // No option positions → options.totalValue=0+2000=2000
+  it("options bucket value is the sum of absolute position values", () => {
     const rows: FidelityRow[] = [
-      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 93000 }),
-      row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 7000, currentValue: 7000 }),
+      row({ symbol: "-AAPL", description: "AAPL JAN 16 2026 $150 PUT", quantity: -1, currentValue: -500 }),
+      row({ symbol: "AAPL300118C00100000", description: "AAPL JAN 18 2030 $100 CALL", quantity: 1, currentValue: 4500 }),
     ];
-    const snap = buildSnapshot(rows, "test.csv", null);
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const options = snap.buckets.find((b) => b.key === "options")!;
-    expect(options.totalValue).toBeCloseTo(2000);
+    expect(options.totalValue).toBeCloseTo(5000);
   });
+});
 
-  it("invariant: safeSide + cash + options ≈ totalValue (no short positions)", () => {
+describe("buildSnapshot — invariants", () => {
+  it("safeSide + cash + options ≈ totalValue (no short positions)", () => {
     const rows: FidelityRow[] = [
       row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 60000 }),
       row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 8000, currentValue: 8000 }),
-      row({
-        symbol: "AAPL300118C00100000",
-        description: "AAPL JAN 18 2030 $100 CALL",
-        quantity: 1,
-        currentValue: 4500,
-      }),
+      row({ symbol: "AAPL300118C00100000", description: "AAPL JAN 18 2030 $100 CALL", quantity: 1, currentValue: 4500 }),
     ];
-    const snap = buildSnapshot(rows, "test.csv", null);
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const sum = snap.buckets.reduce((s, b) => s + b.totalValue, 0);
     expect(sum).toBeCloseTo(snap.totalValue, 0);
   });
 
   it("with short options, bucket sum exceeds totalValue by 2× short mark (Math.abs side effect)", () => {
     // Short put at -500: totalValue includes -500, options bucket adds abs(500).
-    // Sum overshoots by 1000 = 2 × 500. Tracking this as a known invariant under Math.abs semantics.
+    // Sum overshoots by 1000 = 2 × 500. Documented known behavior under Math.abs semantics.
     const rows: FidelityRow[] = [
       row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 60000 }),
       row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 8000, currentValue: 8000 }),
-      row({
-        symbol: "-AAPL",
-        description: "AAPL JAN 16 2026 $150 PUT",
-        quantity: -1,
-        currentValue: -500,
-      }),
+      row({ symbol: "-AAPL", description: "AAPL JAN 16 2026 $150 PUT", quantity: -1, currentValue: -500 }),
     ];
-    const snap = buildSnapshot(rows, "test.csv", null);
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const sum = snap.buckets.reduce((s, b) => s + b.totalValue, 0);
     expect(sum - snap.totalValue).toBeCloseTo(1000, 0);
   });
+});
 
-  it("options 现金 item has target 0%", () => {
+describe("buildSnapshot — age/income drive targets", () => {
+  it("age 25 → safeSide target 45%", () => {
     const rows: FidelityRow[] = [
-      row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 7000, currentValue: 7000 }),
+      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 50000 }),
     ];
-    const snap = buildSnapshot(rows, "test.csv", null);
-    const options = snap.buckets.find((b) => b.key === "options")!;
-    const cashItem = options.items.find((i) => i.label === "现金")!;
-    expect(cashItem.targetPctOfBucket).toBe(0);
+    const snap = buildSnapshot(rows, "test.csv", null, 25, true);
+    const dca = snap.buckets.find((b) => b.key === "safe-side")!;
+    expect(dca.targetPctOfTotal).toBe(45);
+  });
+
+  it("age 38 → safeSide target 58%", () => {
+    const rows: FidelityRow[] = [
+      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 50000 }),
+    ];
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
+    const dca = snap.buckets.find((b) => b.key === "safe-side")!;
+    expect(dca.targetPctOfTotal).toBe(58);
+  });
+
+  it("hasIncome=true → cash target 5%", () => {
+    const rows: FidelityRow[] = [
+      row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 5000, currentValue: 5000 }),
+    ];
+    const snap = buildSnapshot(rows, "test.csv", null, 25, true);
+    const cash = snap.buckets.find((b) => b.key === "cash")!;
+    expect(cash.targetPctOfTotal).toBe(5);
+  });
+
+  it("hasIncome=false → cash target 10%", () => {
+    const rows: FidelityRow[] = [
+      row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 5000, currentValue: 5000 }),
+    ];
+    const snap = buildSnapshot(rows, "test.csv", null, 25, false);
+    const cash = snap.buckets.find((b) => b.key === "cash")!;
+    expect(cash.targetPctOfTotal).toBe(10);
   });
 });

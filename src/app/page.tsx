@@ -25,11 +25,11 @@ export default function Home() {
         return;
       }
       if (files.length === 1) {
-        setCurrent(buildSnapshot(files[0].rows, files[0].name, files[0].date));
+        setCurrent(buildSnapshot(files[0].rows, files[0].name, files[0].date, 25, true));
         setComparison(null);
       } else {
-        const prev = buildSnapshot(files[0].rows, files[0].name, files[0].date);
-        const curr = buildSnapshot(files[1].rows, files[1].name, files[1].date);
+        const prev = buildSnapshot(files[0].rows, files[0].name, files[0].date, 25, true);
+        const curr = buildSnapshot(files[1].rows, files[1].name, files[1].date, 25, true);
         setCurrent(curr);
         setComparison({
           current: curr,

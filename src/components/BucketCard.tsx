@@ -111,7 +111,6 @@ export default function BucketCard({ bucket }: BucketCardProps) {
             {formatDollar(bucket.totalValue)}
           </p>
           <p className={`text-sm font-semibold mt-3 ${titleColor}`}>
-            {/* cash bucket is capped at target by splitCash — "over target" case is unreachable */}
             {bucket.currentPctOfTotal < bucket.targetPctOfTotal - 1
               ? "现金略低目标"
               : "现金在目标范围"}

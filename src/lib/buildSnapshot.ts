@@ -1,6 +1,5 @@
 import { classifyHoldings } from "./classifyHoldings";
 import { calculateTargets } from "./calculateTargets";
-import { splitCash } from "./splitCash";
 import type {
   FidelityRow,
   PortfolioSnapshot,
@@ -16,70 +15,61 @@ function calcTotal(rows: FidelityRow[]): number {
 export function buildSnapshot(
   rows: FidelityRow[],
   fileName: string,
-  date: Date | null
+  date: Date | null,
+  age: number,
+  hasIncome: boolean
 ): PortfolioSnapshot {
   const totalValue = calcTotal(rows);
   const classified = classifyHoldings(
     rows.filter((r) => r.symbol !== "Pending activity")
   );
-  const targets = calculateTargets(38, true);
+  const targets = calculateTargets(age, hasIncome);
 
   const pct = (numerator: number, denom: number) =>
     denom > 0 ? (numerator / denom) * 100 : 0;
 
-  // ===== Safe Side bucket =====
+  // ===== Safe Side bucket (ETF holdings merged by display group) =====
   const safeSideHoldings = classified.filter((h) => h.category === "safe-side");
   const safeSideValue = safeSideHoldings.reduce(
     (s, h) => s + h.currentValue,
     0
   );
 
-  // Aggregate by symbol (same symbol may appear in multiple rows)
-  const safeSideBySymbol = new Map<string, number>();
+  // qqqm-family → "QQQM", voo-family → "VOO", individual stocks → own symbol
+  const displayGroup = (h: (typeof safeSideHoldings)[number]): string => {
+    if (h.safeSideSubCategory === "qqqm") return "QQQM";
+    if (h.safeSideSubCategory === "voo") return "VOO";
+    return h.symbol;
+  };
+
+  const safeSideByGroup = new Map<string, number>();
   for (const h of safeSideHoldings) {
-    safeSideBySymbol.set(
-      h.symbol,
-      (safeSideBySymbol.get(h.symbol) ?? 0) + h.currentValue
-    );
+    const g = displayGroup(h);
+    safeSideByGroup.set(g, (safeSideByGroup.get(g) ?? 0) + h.currentValue);
   }
-  const ETF_TICKERS = new Set([
-    "QQQM",
-    "QQQ",
-    "QLD",
-    "VGT",
-    "VOO",
-    "SPY",
-    "FXAIX",
-  ]);
-  const safeSideItems: BucketItem[] = Array.from(safeSideBySymbol.entries())
-    .map(([symbol, value]) => ({
-      label: symbol,
+  const safeSideItems: BucketItem[] = Array.from(safeSideByGroup.entries())
+    .map(([label, value]) => ({
+      label,
       value,
       currentPctOfBucket: pct(value, safeSideValue),
-      // Target: ETFs (QQQM/VOO etc) get 30% target, individual stocks get 10% cap
-      targetPctOfBucket: ETF_TICKERS.has(symbol) ? 30 : 10,
+      // ETF groups (QQQM/VOO) target 30%, individual stocks target 10%
+      targetPctOfBucket: label === "QQQM" || label === "VOO" ? 30 : 10,
     }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
 
-  // ===== Cash bucket (capped at target; excess flows to options) =====
+  // ===== Cash bucket (all cash, uncapped) =====
   const cashHoldings = classified.filter((h) => h.category === "cash");
-  const totalCash = cashHoldings.reduce((s, h) => s + h.currentValue, 0);
-  const { cashBucket: cashValue, optionsExcessCash } = splitCash({
-    totalCash,
-    totalValue,
-    cashTargetPct: targets.cash,
-  });
+  const cashValue = cashHoldings.reduce((s, h) => s + h.currentValue, 0);
 
-  // ===== Options bucket (positions + excess cash) =====
+  // ===== Options bucket (positions only, no cash) =====
   const optionsHoldings = classified.filter(
     (h) => h.category === "wheel" || h.category === "leaps"
   );
-  const optionsPositionsValue = optionsHoldings.reduce(
+  const optionsValue = optionsHoldings.reduce(
     (s, h) => s + Math.abs(h.currentValue),
     0
   );
-  const optionsValue = optionsPositionsValue + optionsExcessCash;
 
   let sellPutValue = 0;
   let sellCallValue = 0;
@@ -98,7 +88,7 @@ export function buildSnapshot(
       label: "Sell Put",
       value: sellPutValue,
       currentPctOfBucket: pct(sellPutValue, optionsValue),
-      targetPctOfBucket: 40, // half of Wheel (80% of options)
+      targetPctOfBucket: 40,
     },
     {
       label: "Sell Call",
@@ -111,12 +101,6 @@ export function buildSnapshot(
       value: leapsValue,
       currentPctOfBucket: pct(leapsValue, optionsValue),
       targetPctOfBucket: 20,
-    },
-    {
-      label: "现金",
-      value: optionsExcessCash,
-      currentPctOfBucket: pct(optionsExcessCash, optionsValue),
-      targetPctOfBucket: 0,
     },
   ];
 
