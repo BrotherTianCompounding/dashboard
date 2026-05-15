@@ -64,10 +64,14 @@ export default function BucketCard({ bucket }: BucketCardProps) {
     )
   );
 
-  const titleColor = bucketTextColorClass(
-    bucket.currentPctOfTotal,
-    bucket.targetPctOfTotal
-  );
+  const titleColor = isCash
+    ? bucket.currentPctOfTotal < bucket.targetPctOfTotal - 1
+      ? "text-blue-400"
+      : "text-green-400"
+    : bucketTextColorClass(
+        bucket.currentPctOfTotal,
+        bucket.targetPctOfTotal
+      );
 
   // ===== Narrow variant (cash bucket: pie + big % + status text below) =====
   if (isNarrow) {
@@ -115,8 +119,8 @@ export default function BucketCard({ bucket }: BucketCardProps) {
               ? "现金略低目标"
               : "现金在目标范围"}
           </p>
-          <p className="text-xs text-gray-600 mt-1 max-w-[180px]">
-            超额现金已自动计入期权仓
+          <p className="text-xs text-gray-600 mt-2 max-w-[200px]">
+            最低现金仓位目标 5%（如果没有收入就是10%），多余现金可用于期权 sell put
           </p>
         </div>
       </div>
