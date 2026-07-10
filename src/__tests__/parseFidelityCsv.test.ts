@@ -46,6 +46,22 @@ Individual,SPAXX**,HELD IN MONEY MARKET,,,,$44600.00,,,11.43%`;
     expect(rows[0].symbol).toBe("SPAXX");
   });
 
+  it("parses Fidelity's new sentence-case headers without Sleeve Name column", () => {
+    // As of Jul 2026 Fidelity lowercased headers and dropped "Sleeve Name".
+    const csv = `Account number,Account name,Symbol,Description,Quantity,Last price,Last price change,Current value,Today's gain/loss dollar,Today's gain/loss percent,Total gain/loss dollar,Total gain/loss percent,Percent of account,Cost basis total,Average cost basis,Type
+X94924857,Individual - TOD,NVDA,NVIDIA CORPORATION COM,250,$210.96,+$8.18,$52740.00,+$2045.00,+4.03%,+$22733.45,+75.76%,9.02%,$30006.55,$120.03,Margin,`;
+    const rows = parseFidelityCsv(csv);
+    expect(rows).toHaveLength(1);
+    const nvda = rows[0];
+    expect(nvda.symbol).toBe("NVDA");
+    expect(nvda.quantity).toBe(250);
+    expect(nvda.lastPrice).toBe(210.96);
+    expect(nvda.currentValue).toBe(52740.0);
+    expect(nvda.costBasisTotal).toBe(30006.55);
+    expect(nvda.totalGainLossDollar).toBe(22733.45);
+    expect(nvda.percentOfAccount).toBe(9.02);
+  });
+
   it("keeps Pending activity rows for total calc", () => {
     const csv = `Account Number,Account Name,Symbol,Description,Quantity,Last Price,Last Price Change,Current Value,Today's Gain/Loss Dollar,Today's Gain/Loss Percent,Total Gain/Loss Dollar,Total Gain/Loss Percent,Percent Of Account,Cost Basis Total,Average Cost Basis,Type
 X123,Individual,VOO,VANGUARD,80,$621.34,+$15.30,$49707.20,+$1224.00,+2.52%,+$16586.77,+50.08%,12.74%,$33120.43,$414.01,Margin,
