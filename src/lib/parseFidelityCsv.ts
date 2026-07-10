@@ -10,29 +10,33 @@ function parseNum(raw: string | undefined): number {
 }
 
 export function parseFidelityCsv(csvString: string): FidelityRow[] {
+  // Fidelity has shipped headers in both Title Case ("Last Price") and
+  // sentence case ("Last price"), and occasionally drops columns (e.g. "Sleeve
+  // Name"). Normalize header keys to lowercase so lookups survive either style.
   const result = Papa.parse<Record<string, string>>(csvString, {
     header: true,
     skipEmptyLines: true,
+    transformHeader: (h) => h.trim().toLowerCase(),
   });
 
   return result.data
     .filter((row) => {
-      const symbol = (row["Symbol"] ?? "").trim();
+      const symbol = (row["symbol"] ?? "").trim();
       if (!symbol) return false;
       // Filter out disclaimer/footer rows (but keep Pending activity for total calc)
       if (symbol.startsWith('"')) return false;
       return true;
     })
     .map((row) => ({
-      accountName: (row["Account Name"] ?? row["Account Name/Number"] ?? "").trim(),
-      symbol: (row["Symbol"] ?? "").trim().replace(/\*+$/, ""), // SPAXX** → SPAXX
-      description: (row["Description"] ?? "").trim(),
-      quantity: parseNum(row["Quantity"]),
-      lastPrice: parseNum(row["Last Price"]),
-      currentValue: parseNum(row["Current Value"]),
-      costBasisTotal: parseNum(row["Cost Basis Total"]),
-      totalGainLossDollar: parseNum(row["Total Gain/Loss Dollar"]),
-      percentOfAccount: parseNum(row["Percent Of Account"]),
+      accountName: (row["account name"] ?? row["account name/number"] ?? "").trim(),
+      symbol: (row["symbol"] ?? "").trim().replace(/\*+$/, ""), // SPAXX** → SPAXX
+      description: (row["description"] ?? "").trim(),
+      quantity: parseNum(row["quantity"]),
+      lastPrice: parseNum(row["last price"]),
+      currentValue: parseNum(row["current value"]),
+      costBasisTotal: parseNum(row["cost basis total"]),
+      totalGainLossDollar: parseNum(row["total gain/loss dollar"]),
+      percentOfAccount: parseNum(row["percent of account"]),
     }));
 }
 
