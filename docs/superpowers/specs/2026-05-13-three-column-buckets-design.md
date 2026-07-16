@@ -182,3 +182,83 @@ items = [
   safeSide + cash + options ≈ totalValue (±$1)
   Σ(期权items.value)     = options.totalValue
 ```
+
+---
+
+# Round 2 修订（2026-05-14）
+
+> 以下条款**取代** Round 1 中冲突的部分。Round 1 文本保留作为历史记录。
+
+Round 1 实现（Task 1-5）已完成并合入 `feat/three-column-buckets`。用户走查后提出三组修订。
+
+## R2.1 撤销现金跨 Bucket 拆分（取代 §3.1 / §3.2 / §3.3 的现金部分）
+
+**全部现金进现金仓，不封顶。期权仓不再包含任何现金。**
+
+- `cash` bucket = Σ(category === "cash" 的持仓 currentValue)，即全部现金，无上限。
+- `options` bucket = Σ |期权持仓|（仅持仓，**不含**任何超额现金）。
+- 期权柱状图**去掉「现金」项** → 只剩 3 条：Sell Put / Sell Call / LEAPS Call。
+- `splitCash.ts` 及其测试成为死代码 → **删除**。
+
+**理由**：用户改变主意，认为现金统一管理更清晰；5%/10% 是「最低目标」而非「上限」，多余现金的用途（sell put 弹药）用文字说明即可，不需要在数据层拆分。
+
+## R2.2 现金饼图颜色 + 文字（取代 §3.5）
+
+5%/10% 现在是**最低目标线**（floor），不是上限。
+
+- 现金 < 最低目标（容差 -1%）→ **蓝色**（储备不足）
+- 现金 ≥ 最低目标 → **绿色**（满足最低线；多余部分是 sell put 弹药，不算问题）
+- **永远不会黄色**
+
+现金窄卡底部文字（取代 Round 1 的「超额现金已自动计入期权仓」）：
+
+> 最低现金仓位目标 5%（如果没有收入就是10%），多余现金可用于期权 sell put
+
+文字按字面显示（同时含 5% 和 10% 两个数字），不做动态替换。状态文字「现金略低目标 / 现金在目标范围」保留。
+
+## R2.3 动态年龄/收入控件（新增）
+
+当前 `buildSnapshot` 写死 `calculateTargets(38, true)`。改为用户可调。
+
+**新增 `<SettingsCard>` 组件**（独立卡片，放在 UploadZone 下方、PortfolioOverview 上方）：
+- 年龄：滑条 `0-50` + 右侧数字 Input（双向同步，可拖可打字）
+- 收入：下拉 `有收入` / `没有收入`
+- 默认值：年龄 **25**、有收入
+- **不持久化**（每次刷新重置为默认值）
+
+**架构改动**：
+- `buildSnapshot` 签名新增 `age: number, hasIncome: boolean` 参数，替换写死的 `calculateTargets(38, true)`。
+- `page.tsx` 新增 state：`age`、`hasIncome`，并把上传的**原始 files 数据**存入 state（当前只存算好的 snapshot，参数一变无法重算）。
+- 用 `useMemo` 基于 `[files, age, hasIncome]` 派生 `current` + `comparison`。
+- 三个饼图的「目标 X%」label 本就读 `bucket.targetPctOfTotal`，参数变化后自动更新，BucketCard 无需改这部分。
+
+## R2.4 定投仓 ETF 合并显示（取代 §3.4）
+
+定投仓柱状图从「按 symbol 聚合」改为「按显示组聚合」：
+
+- `safeSideSubCategory === "qqqm"` → 合并为一条 **"QQQM"**（含 QQQM / QQQ / QLD / VGT）
+- `safeSideSubCategory === "voo"` → 合并为一条 **"VOO"**（含 VOO / SPY / FXAIX）
+- `safeSideSubCategory === "stocks"` → 个股按自己的 symbol 单独显示
+- 目标 %：组 "QQQM" / "VOO" → 30%，个股 → 10%
+- 前 5 排序规则不变（按聚合后的 value 降序）
+
+`classifyHoldings.ts` 已经在产出 `safeSideSubCategory`，buildSnapshot 直接复用，不改分类逻辑。
+
+## R2.5 Round 2 不变式（取代 §9）
+
+```
+∀ snapshot:
+  cash.totalValue        = Σ(全部 cash 持仓)            // 不再封顶
+  options.totalValue     = Σ |期权持仓|                 // 不含现金
+  options.items          = [Sell Put, Sell Call, LEAPS Call]  // 3 项，无现金
+  safeSide + cash + Σ(signed 期权) = totalValue (±$1)
+  safeSide + cash + options 在有 short 时超出 totalValue 2×|short marks|（已知 Math.abs 副作用，有测试锁定）
+  现金颜色 ∈ {蓝, 绿}                                   // 永不黄
+  buildSnapshot(rows, name, date, age, hasIncome) — 4→6 参数
+```
+
+## R2.6 Round 2 不在范围内（YAGNI）
+
+- 年龄/收入持久化（已确认不需要）。
+- 年龄滑条超过 50（已确认 0-50 足够；calculateTargets 内部 SAFE_SIDE_CAP=80 保留但不会触发）。
+- 现金卡底部文字根据 hasIncome 动态切换 5%/10%（按字面显示即可）。
