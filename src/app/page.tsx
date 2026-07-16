@@ -3,7 +3,8 @@
 import { useState, useCallback, useMemo } from "react";
 import UploadZone from "../components/UploadZone";
 import PortfolioOverview from "../components/PortfolioOverview";
-import BucketCard from "../components/BucketCard";
+import StockBucketCard from "../components/StockBucketCard";
+import OptionsCashCard from "../components/OptionsCashCard";
 import SettingsCard from "../components/SettingsCard";
 import { buildSnapshot } from "../lib/buildSnapshot";
 import type {
@@ -97,12 +98,16 @@ export default function Home() {
 
       {current && (
         <div
-          className="grid grid-cols-1 md:grid-cols-[2.5fr_1fr_2.5fr] gap-4 animate-fade-in"
+          className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 animate-fade-in"
           style={{ animationDelay: "0.2s", opacity: 0 }}
         >
-          {current.buckets.map((bucket) => (
-            <BucketCard key={bucket.key} bucket={bucket} />
-          ))}
+          <StockBucketCard
+            bucket={current.buckets.find((b) => b.key === "safe-side")!}
+          />
+          <OptionsCashCard
+            cash={current.buckets.find((b) => b.key === "cash")!}
+            options={current.buckets.find((b) => b.key === "options")!}
+          />
         </div>
       )}
     </main>

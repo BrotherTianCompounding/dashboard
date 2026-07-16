@@ -47,81 +47,63 @@ describe("buildSnapshot (baseline behavior)", () => {
   });
 });
 
-describe("buildSnapshot — ETF grouping in DCA bar", () => {
-  it("merges qqqm-family tickers (QQQM/QQQ/QLD/VGT) into a single QQQM row", () => {
+describe("buildSnapshot — 正股定投仓 (one row per ticker)", () => {
+  it("sums the same symbol split across cash + margin into one row", () => {
+    const rows: FidelityRow[] = [
+      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 20, currentValue: 6000 }),
+      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 2, currentValue: 500 }),
+    ];
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
+    const dca = snap.buckets.find((b) => b.key === "safe-side")!;
+    const qqqm = dca.items.filter((i) => i.label === "QQQM");
+    expect(qqqm).toHaveLength(1);
+    expect(qqqm[0].value).toBeCloseTo(6500);
+  });
+
+  it("keeps every ETF and stock under its own symbol (no family merge)", () => {
     const rows: FidelityRow[] = [
       row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 10000 }),
       row({ symbol: "QQQ", description: "INVESCO QQQ TRUST", quantity: 50, currentValue: 8000 }),
-      row({ symbol: "QLD", description: "PROSHARES ULTRA QQQ", quantity: 20, currentValue: 4000 }),
-      row({ symbol: "VGT", description: "VANGUARD INFO TECH ETF", quantity: 10, currentValue: 3000 }),
-    ];
-    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
-    const dca = snap.buckets.find((b) => b.key === "safe-side")!;
-    const qqqmItems = dca.items.filter((i) => i.label === "QQQM");
-    expect(qqqmItems).toHaveLength(1);
-    expect(qqqmItems[0].value).toBeCloseTo(25000);
-  });
-
-  it("merges voo-family tickers (VOO/SPY/FXAIX) into a single VOO row", () => {
-    const rows: FidelityRow[] = [
       row({ symbol: "VOO", description: "VANGUARD S&P 500 ETF", quantity: 10, currentValue: 5000 }),
       row({ symbol: "SPY", description: "SPDR S&P 500 ETF TRUST", quantity: 5, currentValue: 3000 }),
-      row({ symbol: "FXAIX", description: "FIDELITY 500 INDEX FUND", quantity: 100, currentValue: 2000 }),
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const dca = snap.buckets.find((b) => b.key === "safe-side")!;
-    const vooItems = dca.items.filter((i) => i.label === "VOO");
-    expect(vooItems).toHaveLength(1);
-    expect(vooItems[0].value).toBeCloseTo(10000);
+    expect(dca.items.map((i) => i.label).sort()).toEqual(["QQQ", "QQQM", "SPY", "VOO"]);
   });
 
-  it("keeps individual stocks under their own symbol", () => {
+  it("shows all tickers, sorted by value descending", () => {
     const rows: FidelityRow[] = [
-      row({ symbol: "NVDA", description: "NVIDIA CORP", quantity: 10, currentValue: 5000 }),
-      row({ symbol: "AAPL", description: "APPLE INC", quantity: 20, currentValue: 4000 }),
-    ];
-    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
-    const dca = snap.buckets.find((b) => b.key === "safe-side")!;
-    const labels = dca.items.map((i) => i.label).sort();
-    expect(labels).toEqual(["AAPL", "NVDA"]);
-  });
-
-  it("assigns 30% target to ETF groups, 10% to individual stocks", () => {
-    const rows: FidelityRow[] = [
-      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 10000 }),
-      row({ symbol: "NVDA", description: "NVIDIA CORP", quantity: 10, currentValue: 5000 }),
-    ];
-    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
-    const dca = snap.buckets.find((b) => b.key === "safe-side")!;
-    expect(dca.items.find((i) => i.label === "QQQM")!.targetPctOfBucket).toBe(30);
-    expect(dca.items.find((i) => i.label === "NVDA")!.targetPctOfBucket).toBe(10);
-  });
-
-  it("handles mixed ETF families + individual stocks together, sorted by value", () => {
-    const rows: FidelityRow[] = [
-      // QQQM family → merges to "QQQM", total 30000
-      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 20000 }),
-      row({ symbol: "VGT", description: "VANGUARD INFO TECH ETF", quantity: 10, currentValue: 10000 }),
-      // VOO family → merges to "VOO", total 15000
-      row({ symbol: "VOO", description: "VANGUARD S&P 500 ETF", quantity: 10, currentValue: 9000 }),
-      row({ symbol: "SPY", description: "SPDR S&P 500 ETF TRUST", quantity: 5, currentValue: 6000 }),
-      // individual stocks, own symbols
-      row({ symbol: "NVDA", description: "NVIDIA CORP", quantity: 10, currentValue: 8000 }),
       row({ symbol: "AAPL", description: "APPLE INC", quantity: 20, currentValue: 3000 }),
+      row({ symbol: "NVDA", description: "NVIDIA CORP", quantity: 10, currentValue: 8000 }),
+      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 20000 }),
+      row({ symbol: "VOO", description: "VANGUARD S&P 500 ETF", quantity: 10, currentValue: 9000 }),
+      row({ symbol: "GLW", description: "CORNING INC", quantity: 4, currentValue: 700 }),
+      row({ symbol: "INTC", description: "INTEL CORP", quantity: 5, currentValue: 500 }),
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const dca = snap.buckets.find((b) => b.key === "safe-side")!;
+    // all six shown (no top-N slice), sorted by value
+    expect(dca.items.map((i) => i.label)).toEqual([
+      "QQQM", "VOO", "NVDA", "AAPL", "GLW", "INTC",
+    ]);
+    expect(dca.items.map((i) => i.value)).toEqual([20000, 9000, 8000, 3000, 700, 500]);
+  });
 
-    // 4 display rows: QQQM(30000), VOO(15000), NVDA(8000), AAPL(3000), sorted desc by value
-    expect(dca.items.map((i) => i.label)).toEqual(["QQQM", "VOO", "NVDA", "AAPL"]);
-    expect(dca.items.map((i) => i.value)).toEqual([30000, 15000, 8000, 3000]);
-    // ETF groups get 30% target, individual stocks 10%
-    expect(dca.items.map((i) => i.targetPctOfBucket)).toEqual([30, 30, 10, 10]);
+  it("currentPctOfBucket is the ticker's share of the stock bucket", () => {
+    const rows: FidelityRow[] = [
+      row({ symbol: "NVDA", description: "NVIDIA CORP", quantity: 10, currentValue: 7500 }),
+      row({ symbol: "AAPL", description: "APPLE INC", quantity: 20, currentValue: 2500 }),
+    ];
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
+    const dca = snap.buckets.find((b) => b.key === "safe-side")!;
+    expect(dca.items.find((i) => i.label === "NVDA")!.currentPctOfBucket).toBeCloseTo(75);
+    expect(dca.items.find((i) => i.label === "AAPL")!.currentPctOfBucket).toBeCloseTo(25);
   });
 });
 
-describe("buildSnapshot — options bucket (no cash)", () => {
-  it("options bucket has exactly 3 items: Sell Put, Sell Call, LEAPS Call", () => {
+describe("buildSnapshot — options bucket (4-leg split)", () => {
+  it("options bucket has exactly 4 items: Sell Put, Sell Call, Buy Call, Buy Put", () => {
     const rows: FidelityRow[] = [
       row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 7000, currentValue: 7000 }),
     ];
@@ -130,8 +112,25 @@ describe("buildSnapshot — options bucket (no cash)", () => {
     expect(options.items.map((i) => i.label)).toEqual([
       "Sell Put",
       "Sell Call",
-      "LEAPS Call",
+      "Buy Call",
+      "Buy Put",
     ]);
+  });
+
+  it("splits legs by direction × right, using absolute market value", () => {
+    const rows: FidelityRow[] = [
+      row({ symbol: "-NVDA260807P100", description: "NVDA AUG 07 2026 $100 PUT", quantity: -2, currentValue: -600 }),
+      row({ symbol: "-NVDA260807C220", description: "NVDA AUG 07 2026 $220 CALL", quantity: -1, currentValue: -545 }),
+      row({ symbol: "-AAPL300118C100", description: "AAPL JAN 18 2030 $100 CALL", quantity: 1, currentValue: 4500 }),
+      row({ symbol: "-TSLA260821P380", description: "TSLA AUG 21 2026 $380 PUT", quantity: 1, currentValue: 1280 }),
+    ];
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
+    const options = snap.buckets.find((b) => b.key === "options")!;
+    const by = (label: string) => options.items.find((i) => i.label === label)!.value;
+    expect(by("Sell Put")).toBeCloseTo(600);
+    expect(by("Sell Call")).toBeCloseTo(545);
+    expect(by("Buy Call")).toBeCloseTo(4500);
+    expect(by("Buy Put")).toBeCloseTo(1280);
   });
 
   it("options bucket value is the sum of absolute position values", () => {
