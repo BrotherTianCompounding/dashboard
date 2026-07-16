@@ -28,23 +28,32 @@ export function buildSnapshot(
   const pct = (numerator: number, denom: number) =>
     denom > 0 ? (numerator / denom) * 100 : 0;
 
-  // ===== 正股定投仓 (all stocks + ETFs, one row per ticker) =====
-  // Same symbol split across cash + margin accounts (e.g. QQQM) is summed into
-  // a single row. Every holding is shown, sorted by value (largest first).
+  // ===== 正股定投仓 (stocks + ETFs) =====
+  // Same symbol split across cash + margin accounts is summed. A few ETF
+  // families are displayed as one line: QQQ+QQQM → "QQQ", VOO+SPY+FXAIX → "VOO".
+  // Everything else keeps its own symbol. Only holdings > 1% of the stock
+  // bucket are shown individually; the rest are folded into a single "其他".
+  const STOCK_MERGE: Record<string, string> = {
+    QQQ: "QQQ",
+    QQQM: "QQQ",
+    VOO: "VOO",
+    SPY: "VOO",
+    FXAIX: "VOO",
+  };
+  const MIN_ITEM_PCT = 1;
+
   const safeSideHoldings = classified.filter((h) => h.category === "safe-side");
   const safeSideValue = safeSideHoldings.reduce(
     (s, h) => s + h.currentValue,
     0
   );
 
-  const safeSideBySymbol = new Map<string, number>();
+  const safeSideByGroup = new Map<string, number>();
   for (const h of safeSideHoldings) {
-    safeSideBySymbol.set(
-      h.symbol,
-      (safeSideBySymbol.get(h.symbol) ?? 0) + h.currentValue
-    );
+    const label = STOCK_MERGE[h.symbol] ?? h.symbol;
+    safeSideByGroup.set(label, (safeSideByGroup.get(label) ?? 0) + h.currentValue);
   }
-  const safeSideItems: BucketItem[] = Array.from(safeSideBySymbol.entries())
+  const allStockItems = Array.from(safeSideByGroup.entries())
     .map(([label, value]) => ({
       label,
       value,
@@ -52,6 +61,22 @@ export function buildSnapshot(
       targetPctOfBucket: 0, // no per-ticker target in the two-block view
     }))
     .sort((a, b) => b.value - a.value);
+
+  const safeSideItems: BucketItem[] = allStockItems.filter(
+    (i) => i.currentPctOfBucket > MIN_ITEM_PCT
+  );
+  const smallStockItems = allStockItems.filter(
+    (i) => i.currentPctOfBucket <= MIN_ITEM_PCT
+  );
+  if (smallStockItems.length > 0) {
+    const otherValue = smallStockItems.reduce((s, i) => s + i.value, 0);
+    safeSideItems.push({
+      label: "其他",
+      value: otherValue,
+      currentPctOfBucket: pct(otherValue, safeSideValue),
+      targetPctOfBucket: 0,
+    });
+  }
 
   // ===== Cash bucket (all cash, uncapped) =====
   const cashHoldings = classified.filter((h) => h.category === "cash");
@@ -135,5 +160,12 @@ export function buildSnapshot(
     },
   ];
 
-  return { totalValue, buckets, date, fileName };
+  // Margin used = sum of the three block totals minus the account net total.
+  // Represents sell-put collateral (no interest). Clamp tiny negatives to 0.
+  const marginUsed = Math.max(
+    0,
+    safeSideValue + cashValue + optionsValue - totalValue
+  );
+
+  return { totalValue, buckets, marginUsed, date, fileName };
 }

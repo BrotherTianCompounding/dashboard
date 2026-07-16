@@ -23,15 +23,27 @@ const LEG_LABELS: Record<string, string> = {
 interface OptionsCashCardProps {
   cash: BucketData;
   options: BucketData;
+  marginUsed: number;
+  totalValue: number;
 }
 
-/** Block 2 — 期权仓 + 现金: cash ratio on top, options total + 4-leg split below. */
-export default function OptionsCashCard({ cash, options }: OptionsCashCardProps) {
+/** Block 2 — 期权仓 + 现金: cash ratio, options 4-leg split, margin usage. */
+export default function OptionsCashCard({
+  cash,
+  options,
+  marginUsed,
+  totalValue,
+}: OptionsCashCardProps) {
   const cashUnder = cash.currentPctOfTotal < cash.targetPctOfTotal - 1;
   const cashColor = cashUnder ? "text-blue-400" : "text-green-400";
 
   const legs = options.items;
   const maxBarPct = Math.max(1, ...legs.map((l) => l.currentPctOfBucket));
+
+  const marginPctOfTotal = totalValue > 0 ? (marginUsed / totalValue) * 100 : 0;
+  // Track against the ≤30% margin-occupation rule.
+  const marginColor =
+    marginPctOfTotal > 30 ? "text-yellow-400" : "text-green-400";
 
   return (
     <div className="bg-[#1a1f2e] rounded-xl p-5 flex flex-col">
@@ -105,6 +117,26 @@ export default function OptionsCashCard({ cash, options }: OptionsCashCardProps)
             );
           })}
         </div>
+      </div>
+
+      {/* ===== Margin 占用 ===== */}
+      <div className="rounded-lg bg-[#141926] p-4 mt-4">
+        <div className="flex items-baseline justify-between">
+          <span className="text-sm font-medium text-gray-300">Margin 占用</span>
+          <span className="text-xl font-mono text-gray-100">
+            {formatDollar(marginUsed)}
+          </span>
+        </div>
+        <div className="flex items-baseline gap-2 mt-1">
+          <span className={`text-3xl font-black tracking-tight ${marginColor}`}>
+            {marginPctOfTotal.toFixed(1)}
+            <span className="text-lg">%</span>
+          </span>
+          <span className="text-xs text-gray-500">占整个账户</span>
+        </div>
+        <p className="text-xs text-gray-500 mt-2">
+          仅为 sell put 抵押，不付利息。（正股 + 现金 + 期权 − 账户总值）
+        </p>
       </div>
     </div>
   );

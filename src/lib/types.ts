@@ -71,6 +71,8 @@ export interface BucketData {
 export interface PortfolioSnapshot {
   totalValue: number;
   buckets: BucketData[];
+  /** Margin used = (stocks + cash + options) − account total. Sell-put collateral, no interest. */
+  marginUsed: number;
   date: Date | null;
   fileName: string;
 }
