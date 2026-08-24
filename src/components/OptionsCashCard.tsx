@@ -6,44 +6,38 @@ function formatDollar(v: number): string {
   return "$" + Math.round(v).toLocaleString("en-US");
 }
 
-/** Bar color per option leg (fixed hues, purely descriptive — no target). */
+/** Bar color per option category (fixed hues, purely descriptive). */
 const LEG_COLORS: Record<string, string> = {
+  "LEAPS Call": "bg-blue-500",
   "Sell Put": "bg-emerald-500",
   "Sell Call": "bg-amber-500",
-  "Buy Call": "bg-blue-500",
-  "Buy Put": "bg-purple-500",
+  "Synthetic Long": "bg-cyan-500",
+  "Call Spread": "bg-indigo-500",
+  "Put Spread": "bg-purple-500",
+  Other: "bg-gray-500",
 };
 const LEG_LABELS: Record<string, string> = {
+  "LEAPS Call": "LEAPS Call 长期看涨",
   "Sell Put": "Sell Put 卖出看跌",
   "Sell Call": "Sell Call 卖出看涨",
-  "Buy Call": "Buy Call 买入看涨",
-  "Buy Put": "Buy Put 买入看跌",
+  "Synthetic Long": "合成多头 Synthetic Long",
+  "Call Spread": "看涨价差 Call Spread",
+  "Put Spread": "看跌价差 Put Spread",
+  Other: "其他 Other",
 };
 
 interface OptionsCashCardProps {
   cash: BucketData;
   options: BucketData;
-  marginUsed: number;
-  totalValue: number;
 }
 
-/** Block 2 — 期权仓 + 现金: cash ratio, options 4-leg split, margin usage. */
-export default function OptionsCashCard({
-  cash,
-  options,
-  marginUsed,
-  totalValue,
-}: OptionsCashCardProps) {
+/** Block 2 — 期权仓 + 现金: cash ratio on top, options grouped by combo below. */
+export default function OptionsCashCard({ cash, options }: OptionsCashCardProps) {
   const cashUnder = cash.currentPctOfTotal < cash.targetPctOfTotal - 1;
   const cashColor = cashUnder ? "text-blue-400" : "text-green-400";
 
-  const legs = options.items;
-  const maxBarPct = Math.max(1, ...legs.map((l) => l.currentPctOfBucket));
-
-  const marginPctOfTotal = totalValue > 0 ? (marginUsed / totalValue) * 100 : 0;
-  // Track against the ≤30% margin-occupation rule.
-  const marginColor =
-    marginPctOfTotal > 30 ? "text-yellow-400" : "text-green-400";
+  const items = options.items;
+  const maxBarPct = Math.max(1, ...items.map((l) => l.currentPctOfBucket));
 
   return (
     <div className="bg-[#1a1f2e] rounded-xl p-5 flex flex-col">
@@ -54,7 +48,9 @@ export default function OptionsCashCard({
       {/* ===== 现金仓 ===== */}
       <div className="rounded-lg bg-[#141926] p-4 mb-4">
         <div className="flex items-baseline justify-between">
-          <span className="text-sm font-medium text-gray-300">现金仓 Cash</span>
+          <span className="text-sm font-medium text-gray-300">
+            现金仓 Cash <span className="text-gray-600">（含 pending）</span>
+          </span>
           <span className="text-lg font-mono text-gray-200">
             {formatDollar(cash.totalValue)}
           </span>
@@ -87,56 +83,72 @@ export default function OptionsCashCard({
         </p>
 
         <div className="space-y-3">
-          {legs.map((leg, idx) => {
+          {items.map((item, idx) => {
             const widthPct = Math.min(
-              (leg.currentPctOfBucket / maxBarPct) * 100,
+              (item.currentPctOfBucket / maxBarPct) * 100,
               100
             );
+            const legs = item.legs ?? [];
             return (
               <div key={idx}>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xs font-medium text-gray-300 truncate">
-                    {LEG_LABELS[leg.label] ?? leg.label}
+                    {LEG_LABELS[item.label] ?? item.label}
                   </span>
                   <span className="ml-auto text-xs font-mono text-gray-400 whitespace-nowrap">
-                    {leg.currentPctOfBucket.toFixed(1)}%
+                    {item.currentPctOfBucket.toFixed(1)}%
                   </span>
                   <span className="text-xs font-mono text-gray-300 whitespace-nowrap w-20 text-right">
-                    {formatDollar(leg.value)}
+                    {formatDollar(item.value)}
                   </span>
                 </div>
                 <div className="h-2.5 bg-gray-800 rounded-full overflow-hidden">
                   <div
                     className={`h-full ${
-                      LEG_COLORS[leg.label] ?? "bg-gray-500"
+                      LEG_COLORS[item.label] ?? "bg-gray-500"
                     } rounded-full transition-all duration-700 ease-out`}
                     style={{ width: `${widthPct}%` }}
                   />
                 </div>
+
+                {/* Per-leg detail for single-leg categories */}
+                {legs.length > 0 && (
+                  <div className="mt-2 ml-1 space-y-1.5 border-l border-gray-800 pl-3">
+                    {legs.map((leg, li) => (
+                      <div key={li} className="text-xs">
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-semibold text-gray-200">
+                            {leg.underlying} ${leg.strike}{" "}
+                            {leg.right === "C" ? "Call" : "Put"}
+                          </span>
+                          <span className="text-gray-500">×{leg.contracts}</span>
+                          <span className="ml-auto font-mono text-gray-300">
+                            {formatDollar(leg.value)}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline gap-2 text-gray-500">
+                          <span>{leg.expiry}</span>
+                          <span
+                            className={
+                              leg.daysToExpiry <= 30
+                                ? "text-amber-400"
+                                : "text-gray-500"
+                            }
+                          >
+                            剩 {leg.daysToExpiry} 天
+                          </span>
+                          <span className="ml-auto">
+                            成本 {formatDollar(leg.cost)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
-      </div>
-
-      {/* ===== Margin 占用 ===== */}
-      <div className="rounded-lg bg-[#141926] p-4 mt-4">
-        <div className="flex items-baseline justify-between">
-          <span className="text-sm font-medium text-gray-300">Margin 占用</span>
-          <span className="text-xl font-mono text-gray-100">
-            {formatDollar(marginUsed)}
-          </span>
-        </div>
-        <div className="flex items-baseline gap-2 mt-1">
-          <span className={`text-3xl font-black tracking-tight ${marginColor}`}>
-            {marginPctOfTotal.toFixed(1)}
-            <span className="text-lg">%</span>
-          </span>
-          <span className="text-xs text-gray-500">占整个账户</span>
-        </div>
-        <p className="text-xs text-gray-500 mt-2">
-          仅为 sell put 抵押，不付利息。（正股 + 现金 + 期权 − 账户总值）
-        </p>
       </div>
     </div>
   );

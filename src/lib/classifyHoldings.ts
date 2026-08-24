@@ -48,6 +48,7 @@ export function classifyHoldings(rows: FidelityRow[]): ClassifiedHolding[] {
       description: row.description,
       quantity: row.quantity,
       currentValue: row.currentValue,
+      costBasisTotal: row.costBasisTotal,
       totalGainLossDollar: row.totalGainLossDollar,
     };
 

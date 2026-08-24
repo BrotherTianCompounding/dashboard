@@ -107,8 +107,6 @@ export default function Home() {
           <OptionsCashCard
             cash={current.buckets.find((b) => b.key === "cash")!}
             options={current.buckets.find((b) => b.key === "options")!}
-            marginUsed={current.marginUsed}
-            totalValue={current.totalValue}
           />
         </div>
       )}

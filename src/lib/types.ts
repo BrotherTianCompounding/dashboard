@@ -27,9 +27,26 @@ export interface ClassifiedHolding {
   description: string;
   quantity: number;
   currentValue: number;
+  costBasisTotal: number;
   totalGainLossDollar: number;
   category: HoldingCategory;
   safeSideSubCategory?: SafeSideSubCategory;
+}
+
+/** One option leg's detail, shown under single-leg categories. */
+export interface OptionLegDetail {
+  underlying: string;
+  right: "C" | "P";
+  strike: number;
+  /** ISO-ish display date, e.g. "2027-06-17" */
+  expiry: string;
+  daysToExpiry: number;
+  /** Number of contracts (absolute) */
+  contracts: number;
+  /** Absolute current market value */
+  value: number;
+  /** Absolute cost basis (premium paid/received) */
+  cost: number;
 }
 
 /** Target allocation percentages */
@@ -53,6 +70,8 @@ export interface BucketItem {
   currentPctOfBucket: number;
   /** Target % within this bucket (0-100) */
   targetPctOfBucket: number;
+  /** Per-leg detail (options single-leg categories only) */
+  legs?: OptionLegDetail[];
 }
 
 /** A high-level bucket (定投仓 / 现金仓 / 期权仓) */
@@ -71,8 +90,6 @@ export interface BucketData {
 export interface PortfolioSnapshot {
   totalValue: number;
   buckets: BucketData[];
-  /** Margin used = (stocks + cash + options) − account total. Sell-put collateral, no interest. */
-  marginUsed: number;
   date: Date | null;
   fileName: string;
 }
