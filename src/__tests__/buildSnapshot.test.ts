@@ -173,6 +173,21 @@ describe("buildSnapshot — cash includes pending", () => {
   });
 });
 
+describe("buildSnapshot — manual cash (moomoo)", () => {
+  it("adds manual cash to both the cash bucket and the account total", () => {
+    const rows: FidelityRow[] = [
+      row({ symbol: "SOFI", description: "SoFi Technologies", quantity: 100, currentValue: 1891 }),
+    ];
+    const noCash = buildSnapshot(rows, "moomoo.csv", null, 38, true);
+    expect(noCash.totalValue).toBeCloseTo(1891);
+
+    const withCash = buildSnapshot(rows, "moomoo.csv", null, 38, true, 358.99);
+    expect(withCash.totalValue).toBeCloseTo(2249.99);
+    const cash = withCash.buckets.find((b) => b.key === "cash")!;
+    expect(cash.totalValue).toBeCloseTo(358.99);
+  });
+});
+
 describe("buildSnapshot — invariants", () => {
   it("safeSide + cash + options ≈ totalValue (no short positions)", () => {
     const rows: FidelityRow[] = [
