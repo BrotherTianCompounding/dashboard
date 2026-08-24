@@ -18,6 +18,7 @@ type UploadedFile = { name: string; date: Date | null; rows: FidelityRow[] };
 export default function Home() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [broker, setBroker] = useState<Broker>("fidelity");
+  const [showProgress, setShowProgress] = useState(true);
   const [age, setAge] = useState(25);
   const [hasIncome, setHasIncome] = useState(true);
 
@@ -91,19 +92,31 @@ export default function Home() {
           <h1 className="text-3xl font-bold text-cyan-400 mb-1">天哥投资仪表盘</h1>
           <p className="text-gray-500">百万之路 — Portfolio Dashboard</p>
         </div>
-        <label className="flex flex-col items-end gap-1 shrink-0">
-          <span className="text-xs text-gray-500 uppercase tracking-wider">
-            券商 Broker
-          </span>
-          <select
-            value={broker}
-            onChange={(e) => handleBrokerChange(e.target.value as Broker)}
-            className="bg-[#1a1f2e] border border-gray-700 text-gray-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-400 cursor-pointer"
-          >
-            <option value="fidelity">Fidelity</option>
-            <option value="moomoo">moomoo</option>
-          </select>
-        </label>
+        <div className="flex items-center gap-4 shrink-0">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showProgress}
+              onChange={(e) => setShowProgress(e.target.checked)}
+              className="w-4 h-4 accent-cyan-500 cursor-pointer"
+            />
+            <span className="text-sm text-gray-300">百万进度条</span>
+          </label>
+          <label className="flex flex-col items-end gap-1">
+            <span className="text-xs text-gray-500 uppercase tracking-wider">
+              券商 Broker
+            </span>
+            <select
+              value={broker}
+              onChange={(e) => handleBrokerChange(e.target.value as Broker)}
+              className="bg-[#1a1f2e] border border-gray-700 text-gray-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-400 cursor-pointer"
+            >
+              <option value="fidelity">Fidelity</option>
+              <option value="moomoo">moomoo</option>
+              <option value="wealthsimple">Wealthsimple</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       <UploadZone
@@ -147,7 +160,11 @@ export default function Home() {
 
       {current && (
         <div className="animate-fade-in">
-          <PortfolioOverview snapshot={current} comparison={comparison} />
+          <PortfolioOverview
+            snapshot={current}
+            comparison={comparison}
+            showProgress={showProgress}
+          />
         </div>
       )}
 

@@ -11,8 +11,9 @@ const SAFE_SIDE_TICKERS: Record<string, SafeSideSubCategory> = {
   VGT: "qqqm",   // Vanguard IT ETF, grouped with QQQM (tech/Nasdaq)
 };
 
-/** Cash-equivalent symbols */
-const CASH_TICKERS = new Set(["SPAXX", "FCASH", "FDRXX"]);
+/** Cash-equivalent symbols ("CASH" is the normalized symbol used by importers
+ *  for currency/cash balances, e.g. Wealthsimple's USD/CAD rows). */
+const CASH_TICKERS = new Set(["SPAXX", "FCASH", "FDRXX", "CASH"]);
 
 const MONTH_MAP: Record<string, number> = {
   JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
