@@ -1,4 +1,5 @@
 import { classifyHoldings } from "./classifyHoldings";
+import { classifyOptionCombos } from "./classifyOptionCombos";
 import { calculateTargets } from "./calculateTargets";
 import type {
   FidelityRow,
@@ -78,9 +79,13 @@ export function buildSnapshot(
     });
   }
 
-  // ===== Cash bucket (all cash, uncapped) =====
+  // ===== Cash bucket (all cash + pending settlement) =====
   const cashHoldings = classified.filter((h) => h.category === "cash");
-  const cashValue = cashHoldings.reduce((s, h) => s + h.currentValue, 0);
+  const pendingValue = rows
+    .filter((r) => r.symbol === "Pending activity")
+    .reduce((s, r) => s + r.currentValue, 0);
+  const cashValue =
+    cashHoldings.reduce((s, h) => s + h.currentValue, 0) + pendingValue;
 
   // ===== Options bucket (positions only, no cash) =====
   const optionsHoldings = classified.filter(
@@ -91,47 +96,18 @@ export function buildSnapshot(
     0
   );
 
-  // Split by direction × right: Sell Put / Sell Call / Buy Call / Buy Put.
-  // Value = absolute market value of the position(s) in that category.
-  let sellPutValue = 0;
-  let sellCallValue = 0;
-  let buyCallValue = 0;
-  let buyPutValue = 0;
-  for (const h of optionsHoldings) {
-    const isPut = /\bPUT\b/i.test(h.description);
-    const isCall = /\bCALL\b/i.test(h.description);
-    const v = Math.abs(h.currentValue);
-    if (isPut && h.quantity < 0) sellPutValue += v;
-    else if (isCall && h.quantity < 0) sellCallValue += v;
-    else if (isCall && h.quantity > 0) buyCallValue += v;
-    else if (isPut && h.quantity > 0) buyPutValue += v;
-  }
-  const optionsItems: BucketItem[] = [
-    {
-      label: "Sell Put",
-      value: sellPutValue,
-      currentPctOfBucket: pct(sellPutValue, optionsValue),
+  // Group by combo structure: LEAPS Call / Sell Put / Sell Call /
+  // Synthetic Long / Call Spread / Put Spread (+ Other). Value = absolute
+  // market value summed within each category.
+  const optionsItems: BucketItem[] = classifyOptionCombos(optionsHoldings).map(
+    (c) => ({
+      label: c.label,
+      value: c.value,
+      currentPctOfBucket: pct(c.value, optionsValue),
       targetPctOfBucket: 0,
-    },
-    {
-      label: "Sell Call",
-      value: sellCallValue,
-      currentPctOfBucket: pct(sellCallValue, optionsValue),
-      targetPctOfBucket: 0,
-    },
-    {
-      label: "Buy Call",
-      value: buyCallValue,
-      currentPctOfBucket: pct(buyCallValue, optionsValue),
-      targetPctOfBucket: 0,
-    },
-    {
-      label: "Buy Put",
-      value: buyPutValue,
-      currentPctOfBucket: pct(buyPutValue, optionsValue),
-      targetPctOfBucket: 0,
-    },
-  ];
+      legs: c.legs,
+    })
+  );
 
   const buckets: BucketData[] = [
     {
@@ -160,12 +136,5 @@ export function buildSnapshot(
     },
   ];
 
-  // Margin used = sum of the three block totals minus the account net total.
-  // Represents sell-put collateral (no interest). Clamp tiny negatives to 0.
-  const marginUsed = Math.max(
-    0,
-    safeSideValue + cashValue + optionsValue - totalValue
-  );
-
-  return { totalValue, buckets, marginUsed, date, fileName };
+  return { totalValue, buckets, date, fileName };
 }

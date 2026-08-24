@@ -96,10 +96,12 @@ describe("classifyHoldings", () => {
   });
 
   it("classifies long-dated calls (>180 DTE) as leaps", () => {
+    // Far-future expiry so the >180 DTE assertion is stable over calendar time
+    // (classifyHoldings measures DTE against the real clock).
     const rows = [
       makeRow({
-        symbol: "-QQQ270116C420",
-        description: "QQQ JAN 16 2027 420 CALL",
+        symbol: "-QQQ300116C420",
+        description: "QQQ JAN 16 2030 420 CALL",
         quantity: 2,
         currentValue: 9000,
       }),

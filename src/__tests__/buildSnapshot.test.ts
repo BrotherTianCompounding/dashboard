@@ -119,58 +119,44 @@ describe("buildSnapshot — 正股定投仓 (family merge + 其他)", () => {
   });
 });
 
-describe("buildSnapshot — margin used", () => {
-  it("margin = stocks + cash + options(abs) − account total", () => {
-    // stocks 60000 + cash 8000 + short put abs 500 = 68500;
-    // account total = 60000 + 8000 − 500 = 67500; margin = 1000.
-    const rows: FidelityRow[] = [
-      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 60000 }),
-      row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 8000, currentValue: 8000 }),
-      row({ symbol: "-AAPL", description: "AAPL JAN 16 2026 $150 PUT", quantity: -1, currentValue: -500 }),
-    ];
-    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
-    expect(snap.marginUsed).toBeCloseTo(1000);
-  });
-
-  it("clamps to 0 when the three blocks do not exceed the account total", () => {
-    const rows: FidelityRow[] = [
-      row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 50000 }),
-      row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 5000, currentValue: 5000 }),
-    ];
-    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
-    expect(snap.marginUsed).toBe(0);
-  });
-});
-
-describe("buildSnapshot — options bucket (4-leg split)", () => {
-  it("options bucket has exactly 4 items: Sell Put, Sell Call, Buy Call, Buy Put", () => {
+describe("buildSnapshot — options bucket (combo grouping)", () => {
+  it("shows the six primary categories in order when non-empty", () => {
     const rows: FidelityRow[] = [
       row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 7000, currentValue: 7000 }),
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const options = snap.buckets.find((b) => b.key === "options")!;
+    // no options → six primary categories at 0, no "其他/Other"
     expect(options.items.map((i) => i.label)).toEqual([
+      "LEAPS Call",
       "Sell Put",
       "Sell Call",
-      "Buy Call",
-      "Buy Put",
+      "Synthetic Long",
+      "Call Spread",
+      "Put Spread",
     ]);
   });
 
-  it("splits legs by direction × right, using absolute market value", () => {
+  it("routes a synthetic long, a call spread and a sell put to their categories", () => {
     const rows: FidelityRow[] = [
-      row({ symbol: "-NVDA260807P100", description: "NVDA AUG 07 2026 $100 PUT", quantity: -2, currentValue: -600 }),
-      row({ symbol: "-NVDA260807C220", description: "NVDA AUG 07 2026 $220 CALL", quantity: -1, currentValue: -545 }),
-      row({ symbol: "-AAPL300118C100", description: "AAPL JAN 18 2030 $100 CALL", quantity: 1, currentValue: 4500 }),
-      row({ symbol: "-TSLA260821P380", description: "TSLA AUG 21 2026 $380 PUT", quantity: 1, currentValue: 1280 }),
+      // synthetic long: APP long call + short put, same expiry + strike 370
+      row({ symbol: "-APP270617C370", description: "APP JUN 17 2027 $370 CALL", quantity: 1, currentValue: 20540 }),
+      row({ symbol: "-APP270617P370", description: "APP JUN 17 2027 $370 PUT", quantity: -1, currentValue: -6600 }),
+      // call spread: two SOFI calls, same expiry, different strikes, long + short
+      row({ symbol: "-SOFI270617C17", description: "SOFI JUN 17 2027 $17 CALL", quantity: 1, currentValue: 570 }),
+      row({ symbol: "-SOFI270617C20", description: "SOFI JUN 17 2027 $20 CALL", quantity: -1, currentValue: -450 }),
+      // lone sell put
+      row({ symbol: "-RKLB260821P90", description: "RKLB AUG 21 2026 $90 PUT", quantity: -1, currentValue: -1605 }),
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const options = snap.buckets.find((b) => b.key === "options")!;
     const by = (label: string) => options.items.find((i) => i.label === label)!.value;
-    expect(by("Sell Put")).toBeCloseTo(600);
-    expect(by("Sell Call")).toBeCloseTo(545);
-    expect(by("Buy Call")).toBeCloseTo(4500);
-    expect(by("Buy Put")).toBeCloseTo(1280);
+    expect(by("Synthetic Long")).toBeCloseTo(20540 + 6600);
+    expect(by("Call Spread")).toBeCloseTo(570 + 450);
+    expect(by("Sell Put")).toBeCloseTo(1605);
+    // the sell put also carries per-leg detail
+    const sellPut = options.items.find((i) => i.label === "Sell Put")!;
+    expect(sellPut.legs?.[0]).toMatchObject({ underlying: "RKLB", strike: 90, right: "P", contracts: 1 });
   });
 
   it("options bucket value is the sum of absolute position values", () => {
@@ -181,6 +167,18 @@ describe("buildSnapshot — options bucket (4-leg split)", () => {
     const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const options = snap.buckets.find((b) => b.key === "options")!;
     expect(options.totalValue).toBeCloseTo(5000);
+  });
+});
+
+describe("buildSnapshot — cash includes pending", () => {
+  it("adds Pending activity into the cash bucket", () => {
+    const rows: FidelityRow[] = [
+      row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 5000, currentValue: 5000 }),
+      row({ symbol: "Pending activity", description: "", quantity: 0, currentValue: -300 }),
+    ];
+    const snap = buildSnapshot(rows, "test.csv", null, 38, true);
+    const cash = snap.buckets.find((b) => b.key === "cash")!;
+    expect(cash.totalValue).toBeCloseTo(4700);
   });
 });
 
