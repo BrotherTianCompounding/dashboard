@@ -1,14 +1,12 @@
-import type { ClassifiedHolding, OptionLegDetail } from "./types";
+import type { ClassifiedHolding, OptionTickerCount } from "./types";
 
 const MONTH_MAP: Record<string, number> = {
   JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
   JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11,
 };
 
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
-
-/** Display categories for the options block, in render order. */
-export type ComboKey =
+/** Internal grouping buckets. */
+type Category =
   | "LEAPS Call"
   | "Sell Put"
   | "Sell Call"
@@ -17,32 +15,17 @@ export type ComboKey =
   | "Put Spread"
   | "Other";
 
-const ORDER: ComboKey[] = [
-  "LEAPS Call",
-  "Sell Put",
-  "Sell Call",
-  "Synthetic Long",
-  "Call Spread",
-  "Put Spread",
-  "Other",
-];
-
-/** Categories that list their individual legs in the UI. */
-const DETAILED: ReadonlySet<ComboKey> = new Set<ComboKey>([
-  "LEAPS Call",
-  "Sell Put",
-  "Sell Call",
-]);
+/** Only these are shown; combos merely absorb their legs so they don't count. */
+export type ShownKey = "LEAPS Call" | "Sell Put" | "Sell Call";
+const SHOWN: ShownKey[] = ["LEAPS Call", "Sell Put", "Sell Call"];
 
 interface OptLeg {
   underlying: string;
   expiryKey: string;
-  expiryDate: Date;
   strike: number;
   isCall: boolean;
   qty: number;
   value: number; // abs current market value
-  cost: number; // abs cost basis
 }
 
 /** Parse "NVDA AUG 07 2026 $220 CALL" → leg metadata. Null if not an option. */
@@ -53,83 +36,61 @@ function parseLeg(h: ClassifiedHolding): OptLeg | null {
   if (!m) return null;
   const month = MONTH_MAP[m[2]];
   if (month === undefined) return null;
-  const year = parseInt(m[4]);
-  const day = parseInt(m[3]);
-  const expiryKey = `${m[4]}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const expiryKey = `${m[4]}-${String(month + 1).padStart(2, "0")}-${m[3].padStart(2, "0")}`;
   return {
     underlying: m[1],
     expiryKey,
-    expiryDate: new Date(year, month, day),
     strike: parseFloat(m[5]),
     isCall: m[6] === "CALL",
     qty: h.quantity,
     value: Math.abs(h.currentValue),
-    cost: Math.abs(h.costBasisTotal),
   };
 }
 
 export interface OptionComboGroup {
-  label: ComboKey;
+  label: ShownKey;
   value: number;
-  /** Populated for LEAPS Call / Sell Put / Sell Call; empty otherwise. */
-  legs: OptionLegDetail[];
+  contracts: number;
+  /** Per-underlying tally, sorted by contracts desc then value desc. */
+  tickers: OptionTickerCount[];
 }
 
 /**
- * Group option holdings into display categories (always within one underlying).
+ * Group option holdings into categories (always within one underlying), then
+ * return only the single-leg categories that are actually shown — each collapsed
+ * to a per-underlying contract tally.
  *
- * Priority:
+ * Priority (higher wins, absorbs its legs so they aren't recounted):
  *   1. Synthetic Long — same expiry + strike with a long call AND a short put.
- *   2. Call Spread — remaining calls, same expiry, ≥2 strikes, AND at least one
- *      long and one short leg (a real vertical, not a same-direction ladder).
+ *   2. Call Spread — remaining calls, same expiry, ≥2 strikes, AND ≥1 long & ≥1 short.
  *   3. Put Spread  — same rule for puts.
- *   4. Singles — long call → LEAPS Call; short put → Sell Put;
- *      short call → Sell Call; anything else (lone long put) → Other.
+ *   4. Singles — long call → LEAPS Call; short put → Sell Put; short call → Sell Call.
  *
- * Value per category = sum of absolute market value of its member legs.
- * LEAPS Call / Sell Put / Sell Call also carry per-leg detail.
+ * Synthetic Long / Call Spread / Put Spread / Other are detected only to exclude
+ * their legs; they are not returned for display.
  */
 export function classifyOptionCombos(
-  holdings: ClassifiedHolding[],
-  now: Date = new Date()
+  holdings: ClassifiedHolding[]
 ): OptionComboGroup[] {
-  const totals: Record<ComboKey, number> = {
-    "LEAPS Call": 0,
-    "Sell Put": 0,
-    "Sell Call": 0,
-    "Synthetic Long": 0,
-    "Call Spread": 0,
-    "Put Spread": 0,
-    Other: 0,
-  };
-  const detailLegs: Record<ComboKey, OptionLegDetail[]> = {
-    "LEAPS Call": [],
-    "Sell Put": [],
-    "Sell Call": [],
-    "Synthetic Long": [],
-    "Call Spread": [],
-    "Put Spread": [],
-    Other: [],
-  };
-
   const legs = holdings.map(parseLeg);
-  const assigned: (ComboKey | null)[] = legs.map(() => null);
+  const assigned: (Category | null)[] = legs.map(() => null);
 
-  const assign = (i: number, key: ComboKey) => {
+  // per-shown-category, per-underlying tally
+  const tally: Record<ShownKey, Map<string, { contracts: number; value: number }>> = {
+    "LEAPS Call": new Map(),
+    "Sell Put": new Map(),
+    "Sell Call": new Map(),
+  };
+
+  const assign = (i: number, key: Category) => {
     const l = legs[i]!;
     assigned[i] = key;
-    totals[key] += l.value;
-    if (DETAILED.has(key)) {
-      detailLegs[key].push({
-        underlying: l.underlying,
-        right: l.isCall ? "C" : "P",
-        strike: l.strike,
-        expiry: l.expiryKey,
-        daysToExpiry: Math.round((l.expiryDate.getTime() - now.getTime()) / MS_PER_DAY),
-        contracts: Math.abs(l.qty),
-        value: l.value,
-        cost: l.cost,
-      });
+    if (key === "LEAPS Call" || key === "Sell Put" || key === "Sell Call") {
+      const t = tally[key];
+      const cur = t.get(l.underlying) ?? { contracts: 0, value: 0 };
+      cur.contracts += Math.abs(l.qty);
+      cur.value += l.value;
+      t.set(l.underlying, cur);
     }
   };
 
@@ -162,7 +123,7 @@ export function classifyOptionCombos(
   }
 
   // Steps 2 & 3: spreads — same expiry, ≥2 strikes, and BOTH a long and a short leg
-  const groupSpread = (wantCall: boolean, key: ComboKey) => {
+  const groupSpread = (wantCall: boolean, key: Category) => {
     const byExpiry = groupBy((l, i) =>
       !assigned[i] && l.isCall === wantCall ? `${l.underlying}|${l.expiryKey}` : null
     );
@@ -180,27 +141,22 @@ export function classifyOptionCombos(
 
   // Step 4: remaining singles
   legs.forEach((l, i) => {
-    if (assigned[i]) return;
-    if (!l) {
-      totals.Other += Math.abs(holdings[i].currentValue);
-      return;
-    }
+    if (assigned[i] || !l) return;
     if (l.isCall && l.qty > 0) assign(i, "LEAPS Call");
     else if (!l.isCall && l.qty < 0) assign(i, "Sell Put");
     else if (l.isCall && l.qty < 0) assign(i, "Sell Call");
-    else assign(i, "Other"); // lone long put, etc.
+    // lone long put etc. → not shown
   });
 
-  // Sort detailed legs by soonest expiry, then largest value
-  for (const k of DETAILED) {
-    detailLegs[k].sort(
-      (a, b) => a.daysToExpiry - b.daysToExpiry || b.value - a.value
-    );
-  }
-
-  return ORDER.filter((k) => k !== "Other" || totals[k] > 0).map((k) => ({
-    label: k,
-    value: totals[k],
-    legs: detailLegs[k],
-  }));
+  return SHOWN.map((key) => {
+    const tickers: OptionTickerCount[] = Array.from(tally[key].entries())
+      .map(([underlying, v]) => ({ underlying, contracts: v.contracts, value: v.value }))
+      .sort((a, b) => b.contracts - a.contracts || b.value - a.value);
+    return {
+      label: key,
+      value: tickers.reduce((s, t) => s + t.value, 0),
+      contracts: tickers.reduce((s, t) => s + t.contracts, 0),
+      tickers,
+    };
+  }).filter((g) => g.tickers.length > 0);
 }

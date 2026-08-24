@@ -33,20 +33,13 @@ export interface ClassifiedHolding {
   safeSideSubCategory?: SafeSideSubCategory;
 }
 
-/** One option leg's detail, shown under single-leg categories. */
-export interface OptionLegDetail {
+/** Per-underlying contract tally, shown under single-leg categories. */
+export interface OptionTickerCount {
   underlying: string;
-  right: "C" | "P";
-  strike: number;
-  /** ISO-ish display date, e.g. "2027-06-17" */
-  expiry: string;
-  daysToExpiry: number;
-  /** Number of contracts (absolute) */
+  /** Total contracts across this underlying (absolute) */
   contracts: number;
   /** Absolute current market value */
   value: number;
-  /** Absolute cost basis (premium paid/received) */
-  cost: number;
 }
 
 /** Target allocation percentages */
@@ -70,8 +63,10 @@ export interface BucketItem {
   currentPctOfBucket: number;
   /** Target % within this bucket (0-100) */
   targetPctOfBucket: number;
-  /** Per-leg detail (options single-leg categories only) */
-  legs?: OptionLegDetail[];
+  /** Total contracts (options single-leg categories only) */
+  contracts?: number;
+  /** Per-underlying contract tally (options single-leg categories only) */
+  tickers?: OptionTickerCount[];
 }
 
 /** A high-level bucket (定投仓 / 现金仓 / 期权仓) */
