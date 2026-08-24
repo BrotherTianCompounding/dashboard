@@ -5,6 +5,8 @@ import type { PortfolioSnapshot, PortfolioComparison } from "../lib/types";
 interface PortfolioOverviewProps {
   snapshot: PortfolioSnapshot;
   comparison: PortfolioComparison | null;
+  /** Show the $1M progress bar (default true) */
+  showProgress?: boolean;
 }
 
 const TARGET_CAPITAL = 1_000_000;
@@ -19,6 +21,7 @@ function formatDollar(value: number): string {
 export default function PortfolioOverview({
   snapshot,
   comparison,
+  showProgress = true,
 }: PortfolioOverviewProps) {
   const progressPercent = Math.min(
     (snapshot.totalValue / TARGET_CAPITAL) * 100,
@@ -68,25 +71,27 @@ export default function PortfolioOverview({
         )}
       </div>
 
-      {/* Progress Bar: $400K → $1M */}
-      <div>
-        <div className="flex justify-between text-sm text-gray-400 mb-2">
-          <span>$0</span>
-          <span className="text-cyan-400 font-medium">
-            {progressPercent.toFixed(1)}% 完成
-          </span>
-          <span>$1M 目标</span>
+      {/* Progress Bar: $0 → $1M (optional) */}
+      {showProgress && (
+        <div>
+          <div className="flex justify-between text-sm text-gray-400 mb-2">
+            <span>$0</span>
+            <span className="text-cyan-400 font-medium">
+              {progressPercent.toFixed(1)}% 完成
+            </span>
+            <span>$1M 目标</span>
+          </div>
+          <div className="w-full h-4 bg-gray-800 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-1000 ease-out"
+              style={{ width: `${Math.max(progressPercent, 0)}%` }}
+            />
+          </div>
+          <p className="text-sm text-gray-500 mt-2">
+            距离目标还差 ${formatDollar(Math.max(remaining, 0))}
+          </p>
         </div>
-        <div className="w-full h-4 bg-gray-800 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-1000 ease-out"
-            style={{ width: `${Math.max(progressPercent, 0)}%` }}
-          />
-        </div>
-        <p className="text-sm text-gray-500 mt-2">
-          距离目标还差 ${formatDollar(Math.max(remaining, 0))}
-        </p>
-      </div>
+      )}
     </div>
   );
 }

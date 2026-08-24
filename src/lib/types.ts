@@ -1,5 +1,5 @@
 /** Supported brokers for CSV import */
-export type Broker = "fidelity" | "moomoo";
+export type Broker = "fidelity" | "moomoo" | "wealthsimple";
 
 /** A single normalized position row (Fidelity-shaped; moomoo maps into this) */
 export interface FidelityRow {

@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { parseFidelityCsv, parseDateFromFilename } from "../lib/parseFidelityCsv";
 import { parseMoomooCsv } from "../lib/parseMoomooCsv";
+import { parseWealthsimpleCsv } from "../lib/parseWealthsimpleCsv";
 import type { FidelityRow, Broker } from "../lib/types";
 
 interface UploadedFile {
@@ -19,6 +20,13 @@ interface UploadZoneProps {
 const BROKER_LABEL: Record<Broker, string> = {
   fidelity: "Fidelity",
   moomoo: "moomoo",
+  wealthsimple: "Wealthsimple",
+};
+
+const PARSERS: Record<Broker, (csv: string) => FidelityRow[]> = {
+  fidelity: parseFidelityCsv,
+  moomoo: parseMoomooCsv,
+  wealthsimple: parseWealthsimpleCsv,
 };
 
 export default function UploadZone({ onFilesReady, broker }: UploadZoneProps) {
@@ -29,7 +37,7 @@ export default function UploadZone({ onFilesReady, broker }: UploadZoneProps) {
     (fileList: FileList) => {
       const toProcess = Array.from(fileList).slice(0, 2); // max 2 files
       const results: UploadedFile[] = [];
-      const parse = broker === "moomoo" ? parseMoomooCsv : parseFidelityCsv;
+      const parse = PARSERS[broker] ?? parseFidelityCsv;
 
       let remaining = toProcess.length;
       toProcess.forEach((file) => {
