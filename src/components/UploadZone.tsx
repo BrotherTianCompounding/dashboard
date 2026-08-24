@@ -2,7 +2,8 @@
 
 import { useCallback, useState } from "react";
 import { parseFidelityCsv, parseDateFromFilename } from "../lib/parseFidelityCsv";
-import type { FidelityRow } from "../lib/types";
+import { parseMoomooCsv } from "../lib/parseMoomooCsv";
+import type { FidelityRow, Broker } from "../lib/types";
 
 interface UploadedFile {
   name: string;
@@ -12,9 +13,15 @@ interface UploadedFile {
 
 interface UploadZoneProps {
   onFilesReady: (files: UploadedFile[]) => void;
+  broker: Broker;
 }
 
-export default function UploadZone({ onFilesReady }: UploadZoneProps) {
+const BROKER_LABEL: Record<Broker, string> = {
+  fidelity: "Fidelity",
+  moomoo: "moomoo",
+};
+
+export default function UploadZone({ onFilesReady, broker }: UploadZoneProps) {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
 
@@ -22,13 +29,14 @@ export default function UploadZone({ onFilesReady }: UploadZoneProps) {
     (fileList: FileList) => {
       const toProcess = Array.from(fileList).slice(0, 2); // max 2 files
       const results: UploadedFile[] = [];
+      const parse = broker === "moomoo" ? parseMoomooCsv : parseFidelityCsv;
 
       let remaining = toProcess.length;
       toProcess.forEach((file) => {
         const reader = new FileReader();
         reader.onload = (e) => {
           const text = e.target?.result as string;
-          const rows = parseFidelityCsv(text);
+          const rows = parse(text);
           const date = parseDateFromFilename(file.name);
           results.push({ name: file.name, date, rows });
           remaining--;
@@ -45,7 +53,7 @@ export default function UploadZone({ onFilesReady }: UploadZoneProps) {
         reader.readAsText(file);
       });
     },
-    [onFilesReady]
+    [onFilesReady, broker]
   );
 
   const handleDrop = useCallback(
@@ -91,7 +99,7 @@ export default function UploadZone({ onFilesReady }: UploadZoneProps) {
         >
           <div className="text-center">
             <p className="text-lg text-gray-300 mb-1">
-              拖拽 Fidelity CSV 文件到此处
+              拖拽 {BROKER_LABEL[broker]} CSV 文件到此处
             </p>
             <p className="text-sm text-gray-500">
               上传 1 个文件查看当前持仓，上传 2 个文件对比周变化

@@ -1,4 +1,7 @@
-/** A single row from the Fidelity CSV */
+/** Supported brokers for CSV import */
+export type Broker = "fidelity" | "moomoo";
+
+/** A single normalized position row (Fidelity-shaped; moomoo maps into this) */
 export interface FidelityRow {
   accountName: string;
   symbol: string;
