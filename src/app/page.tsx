@@ -30,6 +30,10 @@ export default function Home() {
     setFiles([]); // clear stale data parsed under the previous broker
   }, []);
 
+  // moomoo's positions export omits cash, so it's entered manually here.
+  const [moomooCash, setMoomooCash] = useState("");
+  const manualCash = broker === "moomoo" ? parseFloat(moomooCash) || 0 : 0;
+
   const { current, comparison } = useMemo<{
     current: ReturnType<typeof buildSnapshot> | null;
     comparison: PortfolioComparison | null;
@@ -44,7 +48,8 @@ export default function Home() {
           files[0].name,
           files[0].date,
           age,
-          hasIncome
+          hasIncome,
+          manualCash
         ),
         comparison: null,
       };
@@ -54,14 +59,16 @@ export default function Home() {
       files[0].name,
       files[0].date,
       age,
-      hasIncome
+      hasIncome,
+      manualCash
     );
     const curr = buildSnapshot(
       files[1].rows,
       files[1].name,
       files[1].date,
       age,
-      hasIncome
+      hasIncome,
+      manualCash
     );
     return {
       current: curr,
@@ -75,7 +82,7 @@ export default function Home() {
             : 0,
       },
     };
-  }, [files, age, hasIncome]);
+  }, [files, age, hasIncome, manualCash]);
 
   return (
     <main className="max-w-7xl mx-auto px-6 py-10">
@@ -104,6 +111,26 @@ export default function Home() {
         broker={broker}
         onFilesReady={handleFilesReady}
       />
+
+      {broker === "moomoo" && (
+        <div className="-mt-4 mb-8 flex flex-wrap items-center gap-3 rounded-xl bg-[#1a1f2e] px-4 py-3">
+          <label className="text-sm text-gray-300" htmlFor="moomoo-cash">
+            现金余额 Cash（USD）
+          </label>
+          <input
+            id="moomoo-cash"
+            type="number"
+            inputMode="decimal"
+            value={moomooCash}
+            onChange={(e) => setMoomooCash(e.target.value)}
+            placeholder="例如 358.99"
+            className="w-40 bg-[#141926] border border-gray-700 text-gray-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-400"
+          />
+          <span className="text-xs text-gray-500">
+            moomoo 持仓表不含现金，请从账户页「Total Cash」手动填入
+          </span>
+        </div>
+      )}
 
       <SettingsCard
         age={age}

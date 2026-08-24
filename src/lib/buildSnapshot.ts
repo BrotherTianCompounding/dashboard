@@ -18,9 +18,11 @@ export function buildSnapshot(
   fileName: string,
   date: Date | null,
   age: number,
-  hasIncome: boolean
+  hasIncome: boolean,
+  /** Manually-entered cash (e.g. moomoo, whose positions export omits cash). */
+  manualCash: number = 0
 ): PortfolioSnapshot {
-  const totalValue = calcTotal(rows);
+  const totalValue = calcTotal(rows) + manualCash;
   const classified = classifyHoldings(
     rows.filter((r) => r.symbol !== "Pending activity")
   );
@@ -85,7 +87,9 @@ export function buildSnapshot(
     .filter((r) => r.symbol === "Pending activity")
     .reduce((s, r) => s + r.currentValue, 0);
   const cashValue =
-    cashHoldings.reduce((s, h) => s + h.currentValue, 0) + pendingValue;
+    cashHoldings.reduce((s, h) => s + h.currentValue, 0) +
+    pendingValue +
+    manualCash;
 
   // ===== Options bucket (positions only, no cash) =====
   const optionsHoldings = classified.filter(
