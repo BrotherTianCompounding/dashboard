@@ -71,5 +71,15 @@ export function parseDateFromFilename(filename: string): Date | null {
     );
   }
 
+  // Format: moomoo export ...-20260823-211241.csv (YYYYMMDD run)
+  const compactMatch = filename.match(/(\d{4})(\d{2})(\d{2})/);
+  if (compactMatch) {
+    const month = parseInt(compactMatch[2]);
+    const day = parseInt(compactMatch[3]);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return new Date(parseInt(compactMatch[1]), month - 1, day);
+    }
+  }
+
   return null;
 }
