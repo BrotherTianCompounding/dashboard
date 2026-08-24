@@ -96,16 +96,17 @@ export function buildSnapshot(
     0
   );
 
-  // Group by combo structure: LEAPS Call / Sell Put / Sell Call /
-  // Synthetic Long / Call Spread / Put Spread (+ Other). Value = absolute
-  // market value summed within each category.
+  // Shown single-leg categories only (LEAPS Call / Sell Put / Sell Call), each
+  // collapsed to a per-underlying contract tally. Synthetic longs and spreads
+  // are detected purely to exclude their legs, and are not displayed.
   const optionsItems: BucketItem[] = classifyOptionCombos(optionsHoldings).map(
     (c) => ({
       label: c.label,
       value: c.value,
       currentPctOfBucket: pct(c.value, optionsValue),
       targetPctOfBucket: 0,
-      legs: c.legs,
+      contracts: c.contracts,
+      tickers: c.tickers,
     })
   );
 

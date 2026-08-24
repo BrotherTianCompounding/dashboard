@@ -14,110 +14,91 @@ function opt(overrides: Partial<ClassifiedHolding>): ClassifiedHolding {
   };
 }
 
-const NOW = new Date(2026, 6, 10); // Jul 10 2026, fixed for DTE assertions
-
-function val(groups: ReturnType<typeof classifyOptionCombos>, label: string) {
-  return groups.find((g) => g.label === label)?.value ?? 0;
-}
+type Groups = ReturnType<typeof classifyOptionCombos>;
+const group = (g: Groups, label: string) => g.find((x) => x.label === label);
+const ticker = (g: Groups, label: string, u: string) =>
+  group(g, label)?.tickers.find((t) => t.underlying === u);
 
 describe("classifyOptionCombos", () => {
-  it("detects a synthetic long (long call + short put, same expiry + strike)", () => {
+  it("only returns the three shown categories (combos are excluded, not shown)", () => {
     const h: ClassifiedHolding[] = [
+      // synthetic long — excluded entirely
       opt({ description: "APP JUN 17 2027 $370 CALL", quantity: 1, currentValue: 20540 }),
       opt({ description: "APP JUN 17 2027 $370 PUT", quantity: -1, currentValue: -6600 }),
     ];
-    const g = classifyOptionCombos(h, NOW);
-    expect(val(g, "Synthetic Long")).toBeCloseTo(27140);
-    expect(val(g, "LEAPS Call")).toBe(0);
-    expect(val(g, "Sell Put")).toBe(0);
+    const g = classifyOptionCombos(h);
+    expect(g).toEqual([]); // both legs absorbed by synthetic long → nothing to show
   });
 
-  it("treats a long+short call vertical as a call spread", () => {
+  it("aggregates lone long calls into LEAPS Call by underlying with contract counts", () => {
+    // QQQ: 6 long calls across strikes/expiries but no matching shorts → all LEAPS
+    const h: ClassifiedHolding[] = [
+      opt({ description: "QQQ JAN 15 2027 $600 CALL", quantity: 1, currentValue: 15045 }),
+      opt({ description: "QQQ JUN 17 2027 $540 CALL", quantity: 1, currentValue: 22003 }),
+      opt({ description: "QQQ JUN 17 2027 $630 CALL", quantity: 1, currentValue: 14872 }),
+      opt({ description: "QQQ JUN 17 2027 $675 CALL", quantity: 1, currentValue: 11703 }),
+      opt({ description: "QQQ SEP 17 2027 $635 CALL", quantity: 1, currentValue: 15586 }),
+      opt({ description: "QQQ SEP 17 2027 $660 CALL", quantity: 1, currentValue: 13851 }),
+      opt({ description: "NOK JAN 21 2028 $12 CALL", quantity: 2, currentValue: 880 }),
+    ];
+    const g = classifyOptionCombos(h);
+    expect(ticker(g, "LEAPS Call", "QQQ")).toMatchObject({ contracts: 6 });
+    expect(ticker(g, "LEAPS Call", "NOK")).toMatchObject({ contracts: 2 });
+    // sorted by contracts desc → QQQ before NOK
+    expect(group(g, "LEAPS Call")!.tickers.map((t) => t.underlying)).toEqual(["QQQ", "NOK"]);
+    expect(group(g, "LEAPS Call")!.contracts).toBe(8);
+  });
+
+  it("a long+short call vertical is excluded (spread), not shown as LEAPS", () => {
     const h: ClassifiedHolding[] = [
       opt({ description: "NFLX JAN 15 2027 $75 CALL", quantity: 2, currentValue: 1750 }),
       opt({ description: "NFLX JAN 15 2027 $78 CALL", quantity: -2, currentValue: -1580 }),
     ];
-    const g = classifyOptionCombos(h, NOW);
-    expect(val(g, "Call Spread")).toBeCloseTo(3330);
+    const g = classifyOptionCombos(h);
+    expect(g).toEqual([]);
   });
 
-  it("does NOT treat same-direction same-expiry calls as a spread (both long → LEAPS)", () => {
-    const h: ClassifiedHolding[] = [
-      opt({ description: "QQQ JUN 17 2027 $540 CALL", quantity: 1, currentValue: 22003 }),
-      opt({ description: "QQQ JUN 17 2027 $630 CALL", quantity: 1, currentValue: 14872 }),
-    ];
-    const g = classifyOptionCombos(h, NOW);
-    expect(val(g, "Call Spread")).toBe(0);
-    expect(val(g, "LEAPS Call")).toBeCloseTo(36875);
-  });
-
-  it("detects a long+short put vertical as a put spread", () => {
-    const h: ClassifiedHolding[] = [
-      opt({ description: "SOXL JUL 31 2026 $195 PUT", quantity: 1, currentValue: 4660 }),
-      opt({ description: "SOXL JUL 31 2026 $210 PUT", quantity: -1, currentValue: -5635 }),
-    ];
-    const g = classifyOptionCombos(h, NOW);
-    expect(val(g, "Put Spread")).toBeCloseTo(10295);
-  });
-
-  it("does NOT treat two short puts (same expiry, diff strike) as a spread", () => {
+  it("two short puts (same expiry, diff strike) are NOT a spread → Sell Put", () => {
     const h: ClassifiedHolding[] = [
       opt({ description: "AAOX AUG 21 2026 $35 PUT", quantity: -2, currentValue: -4080 }),
       opt({ description: "AAOX AUG 21 2026 $40 PUT", quantity: -2, currentValue: -4760 }),
     ];
-    const g = classifyOptionCombos(h, NOW);
-    expect(val(g, "Put Spread")).toBe(0);
-    expect(val(g, "Sell Put")).toBeCloseTo(8840);
+    const g = classifyOptionCombos(h);
+    expect(ticker(g, "Sell Put", "AAOX")).toMatchObject({ contracts: 4, value: 8840 });
   });
 
   it("gives synthetic long priority over a call spread on the shared leg", () => {
     // TSLA Jan21'28: C250 long, C360 long, P360 short.
-    // C360+P360 (same strike) → synthetic; C250 left alone → LEAPS (no spread).
+    // C360+P360 → synthetic (excluded); C250 left alone → LEAPS Call.
     const h: ClassifiedHolding[] = [
       opt({ description: "TSLA JAN 21 2028 $250 CALL", quantity: 1, currentValue: 19715 }),
       opt({ description: "TSLA JAN 21 2028 $360 CALL", quantity: 1, currentValue: 13265 }),
       opt({ description: "TSLA JAN 21 2028 $360 PUT", quantity: -1, currentValue: -6260 }),
     ];
-    const g = classifyOptionCombos(h, NOW);
-    expect(val(g, "Synthetic Long")).toBeCloseTo(13265 + 6260);
-    expect(val(g, "LEAPS Call")).toBeCloseTo(19715);
-    expect(val(g, "Call Spread")).toBe(0);
+    const g = classifyOptionCombos(h);
+    expect(ticker(g, "LEAPS Call", "TSLA")).toMatchObject({ contracts: 1 });
+    // no synthetic/spread label appears in output at all
+    expect(g.map((x) => x.label).sort()).toEqual(["LEAPS Call"]);
   });
 
-  it("carries per-leg detail (strike/expiry/DTE/contracts/cost) for LEAPS Call", () => {
+  it("tallies sell puts and sell calls per underlying", () => {
     const h: ClassifiedHolding[] = [
-      opt({ description: "PLTR JAN 21 2028 $110 CALL", quantity: 1, currentValue: 4660, costBasisTotal: 5342.67 }),
+      opt({ description: "RKLB AUG 21 2026 $90 PUT", quantity: -1, currentValue: -1605 }),
+      opt({ description: "MRVL SEP 18 2026 $270 PUT", quantity: -1, currentValue: -6020 }),
+      opt({ description: "NVDL AUG 21 2026 $32.33 PUT", quantity: -3, currentValue: -990 }),
+      opt({ description: "NVDA AUG 07 2026 $220 CALL", quantity: -1, currentValue: -545 }),
     ];
-    const g = classifyOptionCombos(h, NOW);
-    const leaps = g.find((x) => x.label === "LEAPS Call")!;
-    expect(leaps.legs).toHaveLength(1);
-    expect(leaps.legs[0]).toMatchObject({
-      underlying: "PLTR",
-      right: "C",
-      strike: 110,
-      expiry: "2028-01-21",
-      contracts: 1,
-      value: 4660,
-      cost: 5342.67,
-    });
-    // Jan 21 2028 is well over a year from Jul 10 2026
-    expect(leaps.legs[0].daysToExpiry).toBeGreaterThan(500);
+    const g = classifyOptionCombos(h);
+    expect(ticker(g, "Sell Put", "NVDL")).toMatchObject({ contracts: 3 }); // decimal strike parsed
+    expect(ticker(g, "Sell Put", "RKLB")).toMatchObject({ contracts: 1 });
+    expect(ticker(g, "Sell Call", "NVDA")).toMatchObject({ contracts: 1 });
   });
 
-  it("routes a lone long put to Other", () => {
+  it("excludes a lone long put (not one of the shown categories)", () => {
     const h: ClassifiedHolding[] = [
       opt({ description: "TSLA AUG 21 2026 $380 PUT", quantity: 1, currentValue: 1280 }),
     ];
-    const g = classifyOptionCombos(h, NOW);
-    expect(val(g, "Other")).toBeCloseTo(1280);
-  });
-
-  it("parses decimal strikes", () => {
-    const h: ClassifiedHolding[] = [
-      opt({ description: "NVDL AUG 21 2026 $32.33 PUT", quantity: -3, currentValue: -990 }),
-    ];
-    const g = classifyOptionCombos(h, NOW);
-    const sellPut = g.find((x) => x.label === "Sell Put")!;
-    expect(sellPut.legs[0].strike).toBeCloseTo(32.33);
+    const g = classifyOptionCombos(h);
+    expect(g).toEqual([]);
   });
 });

@@ -119,44 +119,35 @@ describe("buildSnapshot — 正股定投仓 (family merge + 其他)", () => {
   });
 });
 
-describe("buildSnapshot — options bucket (combo grouping)", () => {
-  it("shows the six primary categories in order when non-empty", () => {
+describe("buildSnapshot — options bucket (shown single-leg categories)", () => {
+  it("shows no category rows when there are no options", () => {
     const rows: FidelityRow[] = [
       row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 7000, currentValue: 7000 }),
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const options = snap.buckets.find((b) => b.key === "options")!;
-    // no options → six primary categories at 0, no "其他/Other"
-    expect(options.items.map((i) => i.label)).toEqual([
-      "LEAPS Call",
-      "Sell Put",
-      "Sell Call",
-      "Synthetic Long",
-      "Call Spread",
-      "Put Spread",
-    ]);
+    expect(options.items).toEqual([]);
   });
 
-  it("routes a synthetic long, a call spread and a sell put to their categories", () => {
+  it("excludes synthetic/spread legs and shows only Sell Put with a ticker tally", () => {
     const rows: FidelityRow[] = [
-      // synthetic long: APP long call + short put, same expiry + strike 370
+      // synthetic long — excluded
       row({ symbol: "-APP270617C370", description: "APP JUN 17 2027 $370 CALL", quantity: 1, currentValue: 20540 }),
       row({ symbol: "-APP270617P370", description: "APP JUN 17 2027 $370 PUT", quantity: -1, currentValue: -6600 }),
-      // call spread: two SOFI calls, same expiry, different strikes, long + short
+      // call spread (long + short) — excluded
       row({ symbol: "-SOFI270617C17", description: "SOFI JUN 17 2027 $17 CALL", quantity: 1, currentValue: 570 }),
       row({ symbol: "-SOFI270617C20", description: "SOFI JUN 17 2027 $20 CALL", quantity: -1, currentValue: -450 }),
-      // lone sell put
+      // lone sell put — shown
       row({ symbol: "-RKLB260821P90", description: "RKLB AUG 21 2026 $90 PUT", quantity: -1, currentValue: -1605 }),
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const options = snap.buckets.find((b) => b.key === "options")!;
-    const by = (label: string) => options.items.find((i) => i.label === label)!.value;
-    expect(by("Synthetic Long")).toBeCloseTo(20540 + 6600);
-    expect(by("Call Spread")).toBeCloseTo(570 + 450);
-    expect(by("Sell Put")).toBeCloseTo(1605);
-    // the sell put also carries per-leg detail
-    const sellPut = options.items.find((i) => i.label === "Sell Put")!;
-    expect(sellPut.legs?.[0]).toMatchObject({ underlying: "RKLB", strike: 90, right: "P", contracts: 1 });
+    expect(options.items.map((i) => i.label)).toEqual(["Sell Put"]);
+    const sellPut = options.items[0];
+    expect(sellPut.contracts).toBe(1);
+    expect(sellPut.tickers).toEqual([{ underlying: "RKLB", contracts: 1, value: 1605 }]);
+    // total still counts every option (incl. excluded combos), abs market value
+    expect(options.totalValue).toBeCloseTo(20540 + 6600 + 570 + 450 + 1605);
   });
 
   it("options bucket value is the sum of absolute position values", () => {
