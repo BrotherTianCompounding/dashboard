@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { parseFidelityCsv, parseDateFromFilename } from "../lib/parseFidelityCsv";
 import { parseMoomooCsv } from "../lib/parseMoomooCsv";
 import { parseWealthsimpleCsv } from "../lib/parseWealthsimpleCsv";
+import { parseIbkrCsv } from "../lib/parseIbkrCsv";
 import type { FidelityRow, Broker } from "../lib/types";
 
 interface UploadedFile {
@@ -21,12 +22,14 @@ const BROKER_LABEL: Record<Broker, string> = {
   fidelity: "Fidelity",
   moomoo: "moomoo",
   wealthsimple: "Wealthsimple",
+  ibkr: "IBKR",
 };
 
 const PARSERS: Record<Broker, (csv: string) => FidelityRow[]> = {
   fidelity: parseFidelityCsv,
   moomoo: parseMoomooCsv,
   wealthsimple: parseWealthsimpleCsv,
+  ibkr: parseIbkrCsv,
 };
 
 export default function UploadZone({ onFilesReady, broker }: UploadZoneProps) {

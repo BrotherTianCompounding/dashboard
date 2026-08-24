@@ -114,6 +114,7 @@ export default function Home() {
               <option value="fidelity">Fidelity</option>
               <option value="moomoo">moomoo</option>
               <option value="wealthsimple">Wealthsimple</option>
+              <option value="ibkr">IBKR</option>
             </select>
           </label>
         </div>
