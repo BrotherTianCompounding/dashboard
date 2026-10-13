@@ -107,7 +107,7 @@ describe("calculateDeltaExposures", () => {
     expect(exposures[0].portfolioPct).toBeCloseTo(80);
   });
 
-  it("marks missing option delta as incomplete instead of treating it as zero", () => {
+  it("uses current long-call value when delta is missing", () => {
     const exposures = calculateDeltaExposures(
       [
         row({ symbol: "-QQQ", description: "QQQ JAN 16 2027 $500 CALL", quantity: 1, currentValue: 1000, underlyingPrice: 500 }),
@@ -115,7 +115,33 @@ describe("calculateDeltaExposures", () => {
       10000
     );
     expect(exposures[0].symbol).toBe("QQQ");
+    expect(exposures[0].hasIncompleteData).toBe(false);
+    expect(exposures[0].hasEstimatedExposure).toBe(true);
+    expect(exposures[0].deltaDollarExposure).toBe(1000);
+    expect(exposures[0].portfolioPct).toBe(10);
+  });
+});
+
+describe("missing-delta assignment estimates", () => {
+  it("uses the true multiplier and sorts combined estimates against NAV", () => {
+    const exposures = calculateDeltaExposures([
+      row({ symbol: "AAPL", quantity: 10, lastPrice: 200, currentValue: 2000 }),
+      row({ description: "AAPL JAN 16 2027 $150 PUT", quantity: -2, currentValue: -800, contractMultiplier: 50 }),
+      row({ description: "AAPL JAN 16 2027 $200 CALL", quantity: 1, currentValue: 3000 }),
+      row({ symbol: "QQQ", quantity: 10, lastPrice: 500, currentValue: 5000 }),
+    ], 10000);
+    expect(exposures[0].symbol).toBe("AAPL");
+    expect(exposures[0].optionExposure).toBe(18000);
+    expect(exposures[0].deltaDollarExposure).toBe(20000);
+    expect(exposures[0].portfolioPct).toBe(200);
+    expect(exposures[0].hasIncompleteData).toBe(false);
+  });
+
+  it("keeps unsupported missing-delta short calls incomplete", () => {
+    const exposures = calculateDeltaExposures([
+      row({ description: "QQQ JAN 16 2027 $500 CALL", quantity: -1, currentValue: -1000 }),
+    ], 10000);
     expect(exposures[0].hasIncompleteData).toBe(true);
-    expect(exposures[0].deltaDollarExposure).toBe(0);
+    expect(exposures[0].hasEstimatedExposure).toBe(false);
   });
 });
