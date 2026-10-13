@@ -76,19 +76,7 @@ export default function DeltaExposureCard({ snapshot }: DeltaExposureCardProps) 
                   <tr key={row.symbol} className="bg-[#141926]">
                     <td className="rounded-l-lg px-3 py-2 text-gray-500">{index + 1}</td>
                     <td className="px-3 py-2 font-semibold text-gray-100">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span>{row.symbol}</span>
-                        {row.hasEstimatedExposure && (
-                          <span className="whitespace-nowrap rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
-                            估算仓位
-                          </span>
-                        )}
-                        {row.hasIncompleteData && (
-                          <span className="whitespace-nowrap rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
-                            数据不完整
-                          </span>
-                        )}
-                      </div>
+                      {row.symbol}
                     </td>
                     <td className="px-3 py-2">
                       <div className="h-2.5 overflow-hidden rounded-full bg-gray-800">
