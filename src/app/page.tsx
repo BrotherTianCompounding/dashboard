@@ -115,6 +115,7 @@ export default function Home() {
               <option value="moomoo">moomoo</option>
               <option value="wealthsimple">Wealthsimple</option>
               <option value="ibkr">IBKR</option>
+              <option value="schwab">嘉信 Charles Schwab</option>
             </select>
           </label>
         </div>
@@ -155,7 +156,7 @@ export default function Home() {
 
       {!current && (
         <div className="text-center text-gray-600 py-20">
-          上传 Fidelity CSV 文件开始
+          上传持仓 CSV 文件开始
         </div>
       )}
 
