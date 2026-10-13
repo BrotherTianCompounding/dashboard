@@ -93,6 +93,7 @@ export interface DeltaExposureRow {
   portfolioPct: number;
   underlyingPrice: number | null;
   hasIncompleteData: boolean;
+  hasEstimatedExposure?: boolean;
 }
 
 /** Target allocation percentages */
