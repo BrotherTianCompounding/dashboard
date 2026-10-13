@@ -12,6 +12,12 @@ export interface FidelityRow {
   costBasisTotal: number;
   totalGainLossDollar: number;
   percentOfAccount: number;
+  /** Standard option delta when provided by broker export. */
+  delta?: number | null;
+  /** Option contract multiplier. Defaults to 100 when omitted. */
+  contractMultiplier?: number | null;
+  /** Underlying stock/ETF price for option delta-dollar exposure. */
+  underlyingPrice?: number | null;
 }
 
 /** Which category a holding belongs to */
@@ -34,6 +40,9 @@ export interface ClassifiedHolding {
   totalGainLossDollar: number;
   category: HoldingCategory;
   safeSideSubCategory?: SafeSideSubCategory;
+  delta?: number | null;
+  contractMultiplier?: number | null;
+  underlyingPrice?: number | null;
 }
 
 /** Per-underlying contract tally, shown under single-leg categories. */
@@ -43,6 +52,47 @@ export interface OptionTickerCount {
   contracts: number;
   /** Absolute current market value */
   value: number;
+}
+
+export interface OptionBudgetConfig {
+  sellPutBudgetPct: number;
+  leapsBudgetPct: number;
+  tacticalBudgetPct: number;
+  sellPutMultiplier: number;
+}
+
+export interface BudgetUsageBar {
+  key: "sell-put" | "leaps-call" | "tactical";
+  label: string;
+  currentValue: number;
+  baseBudget: number;
+  maxValue: number;
+  budgetPct: number;
+  detail: string;
+  netValueNote?: string;
+  percentUsed: number | null;
+  visualPercent: number;
+  isOver: boolean;
+  overAmount: number;
+  overPercent: number | null;
+  status: "ok" | "invalid-budget";
+}
+
+export interface OptionRiskSummary {
+  budgetBase: number;
+  config: OptionBudgetConfig;
+  bars: BudgetUsageBar[];
+}
+
+export interface DeltaExposureRow {
+  symbol: string;
+  stockExposure: number;
+  optionExposure: number;
+  deltaDollarExposure: number;
+  deltaShares: number;
+  portfolioPct: number;
+  underlyingPrice: number | null;
+  hasIncompleteData: boolean;
 }
 
 /** Target allocation percentages */
@@ -82,6 +132,7 @@ export interface BucketData {
   /** Target % of overall portfolio (0-100) */
   targetPctOfTotal: number;
   items: BucketItem[];
+  optionRisk?: OptionRiskSummary;
 }
 
 /** Full parsed portfolio snapshot */
@@ -90,6 +141,7 @@ export interface PortfolioSnapshot {
   buckets: BucketData[];
   date: Date | null;
   fileName: string;
+  deltaExposures: DeltaExposureRow[];
 }
 
 /** Comparison result when two snapshots are provided */
