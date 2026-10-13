@@ -261,6 +261,7 @@ export function calculateDeltaExposures(rows: FidelityRow[], totalValue: number)
       portfolioPct: 0,
       underlyingPrice: null,
       hasIncompleteData: false,
+      hasEstimatedExposure: false,
     };
     bySymbol.set(symbol, created);
     return created;
@@ -288,7 +289,22 @@ export function calculateDeltaExposures(rows: FidelityRow[], totalValue: number)
       const target = ensure(parsed.underlying);
       const price = row.underlyingPrice ?? null;
       if (price && price > 0) target.underlyingPrice = price;
-      if (parsed.delta === null || !target.underlyingPrice) {
+      if (parsed.delta === null || !Number.isFinite(parsed.delta)) {
+        let estimatedValue: number | null = null;
+        if (parsed.right === "CALL" && parsed.qty > 0 && Number.isFinite(row.currentValue)) {
+          estimatedValue = Math.abs(row.currentValue);
+        } else if (parsed.right === "PUT" && parsed.qty < 0) {
+          estimatedValue = parsed.strike * parsed.multiplier * parsed.absQty;
+        }
+        if (estimatedValue !== null && Number.isFinite(estimatedValue)) {
+          target.optionExposure += estimatedValue;
+          target.hasEstimatedExposure = true;
+        } else {
+          target.hasIncompleteData = true;
+        }
+        return;
+      }
+      if (!target.underlyingPrice) {
         target.hasIncompleteData = true;
         return;
       }
