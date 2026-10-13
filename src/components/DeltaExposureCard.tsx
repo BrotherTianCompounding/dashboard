@@ -22,6 +22,7 @@ interface DeltaExposureCardProps {
 
 export default function DeltaExposureCard({ snapshot }: DeltaExposureCardProps) {
   const rows = snapshot.deltaExposures;
+  const hasEstimates = rows.some((row) => row.hasEstimatedExposure);
   const maxAbs = Math.max(1, ...rows.map((row) => Math.abs(row.deltaDollarExposure)));
 
   return (
@@ -29,16 +30,22 @@ export default function DeltaExposureCard({ snapshot }: DeltaExposureCardProps) 
       <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
         <div>
           <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">
-            全账户 Delta 敞口排名
+            全账户仓位 / Delta 敞口排名
           </h2>
           <p className="mt-1 text-xs text-gray-500">
-            合并正股及所有期权 · 价格 / Delta 更新时间：{formatDate(snapshot.date)}
+            持仓报告日期：{formatDate(snapshot.date)}
           </p>
         </div>
         <p className="text-xs text-gray-500">
           分母：账户净资产 {formatDollar(snapshot.totalValue)}
         </p>
       </div>
+
+      {hasEstimates && (
+        <p className="mb-3 text-xs text-amber-300">
+          估算口径：缺 Delta 的买入 Call 按当前市值；Sell Put 按行权价 × 合约乘数 × 合约数量计入（标准合约每张 100 股）。有 Delta 时按方向敞口计算。
+        </p>
+      )}
 
       {rows.length === 0 ? (
         <div className="rounded-lg bg-[#141926] p-4 text-sm text-gray-500">
@@ -52,7 +59,7 @@ export default function DeltaExposureCard({ snapshot }: DeltaExposureCardProps) 
                 <th className="w-12 text-left font-medium">排名</th>
                 <th className="w-24 text-left font-medium">标的</th>
                 <th className="text-left font-medium">方向敞口</th>
-                <th className="w-32 text-right font-medium">Delta 美元</th>
+                <th className="w-32 text-right font-medium">仓位金额</th>
                 <th className="w-24 text-right font-medium">比例</th>
                 <th className="w-32 text-right font-medium">正股敞口</th>
                 <th className="w-32 text-right font-medium">期权敞口</th>
@@ -69,10 +76,15 @@ export default function DeltaExposureCard({ snapshot }: DeltaExposureCardProps) 
                   <tr key={row.symbol} className="bg-[#141926]">
                     <td className="rounded-l-lg px-3 py-2 text-gray-500">{index + 1}</td>
                     <td className="px-3 py-2 font-semibold text-gray-100">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span>{row.symbol}</span>
+                        {row.hasEstimatedExposure && (
+                          <span className="whitespace-nowrap rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
+                            估算仓位
+                          </span>
+                        )}
                         {row.hasIncompleteData && (
-                          <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
+                          <span className="whitespace-nowrap rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
                             数据不完整
                           </span>
                         )}
