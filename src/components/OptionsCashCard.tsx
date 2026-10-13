@@ -63,9 +63,6 @@ export default function OptionsCashCard({ cash, options }: OptionsCashCardProps)
           <span className="text-sm font-medium text-gray-300">
             期权仓 Options
           </span>
-          <span className="text-2xl font-mono text-gray-100">
-            {formatDollar(options.totalValue)}
-          </span>
         </div>
         <p className="text-xs text-gray-500 mb-4">
           占整个账户 {options.currentPctOfTotal.toFixed(1)}% · 目标{" "}
