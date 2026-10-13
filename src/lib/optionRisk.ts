@@ -32,7 +32,6 @@ const MONTH_MAP: Record<string, number> = {
 
 interface ParsedOptionLeg {
   id: number;
-  holding: ClassifiedHolding;
   underlying: string;
   expiry: Date;
   expiryKey: string;
@@ -65,7 +64,6 @@ function parseOptionLeg(holding: ClassifiedHolding, id: number): ParsedOptionLeg
   const multiplier = holding.contractMultiplier ?? CONTRACT_MULTIPLIER_FALLBACK;
   return {
     id,
-    holding,
     underlying: match[1],
     expiry,
     expiryKey: `${match[4]}-${String(month + 1).padStart(2, "0")}-${match[3].padStart(2, "0")}`,
@@ -110,21 +108,6 @@ function proportionalValue(leg: ParsedOptionLeg, qty: number): number {
 
 function consume(remaining: Map<number, number>, leg: ParsedOptionLeg, qty: number) {
   remaining.set(leg.id, Math.max((remaining.get(leg.id) ?? 0) - qty, 0));
-}
-
-function pushSlices(target: LegSlice[], remaining: Map<number, number>, legs: ParsedOptionLeg[], qty: number) {
-  let left = qty;
-  for (const leg of legs) {
-    const available = remaining.get(leg.id) ?? 0;
-    if (available <= 0) continue;
-    const used = Math.min(available, left);
-    if (used > 0) {
-      target.push({ leg, qty: used });
-      consume(remaining, leg, used);
-      left -= used;
-    }
-    if (left <= 0) break;
-  }
 }
 
 function detectVerticalSpreads(legs: ParsedOptionLeg[], remaining: Map<number, number>): LegSlice[] {
