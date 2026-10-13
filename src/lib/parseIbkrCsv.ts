@@ -10,6 +10,24 @@ function parseNum(raw: string | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function parseOptionalNum(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const cleaned = raw.replace(/[$,%"]/g, "").trim();
+  if (cleaned === "" || cleaned === "--") return null;
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+function firstNum(row: string[], cols: Record<string, number>, names: string[]): number | null {
+  for (const name of names) {
+    const idx = cols[name];
+    if (idx === undefined) continue;
+    const n = parseOptionalNum(row[idx]);
+    if (n !== null) return n;
+  }
+  return null;
+}
+
 const POSITIONS = "Positions and Mark-to-Market Profit and Loss";
 const NAV = "Net Asset Value";
 
@@ -101,6 +119,9 @@ export function parseIbkrCsv(csvString: string): FidelityRow[] {
         costBasisTotal: 0,
         totalGainLossDollar: parseNum(r[posCols["Total"]]),
         percentOfAccount: 0,
+        delta: firstNum(r, posCols, ["Delta", "Option Delta"]),
+        contractMultiplier: firstNum(r, posCols, ["Multiplier", "Contract Multiplier"]),
+        underlyingPrice: firstNum(r, posCols, ["Underlying Price", "Underlying Close Price"]),
       };
 
       if (assetClass === "Forex") {
