@@ -5,6 +5,7 @@ import UploadZone from "../components/UploadZone";
 import PortfolioOverview from "../components/PortfolioOverview";
 import StockBucketCard from "../components/StockBucketCard";
 import OptionsCashCard from "../components/OptionsCashCard";
+import DeltaExposureCard from "../components/DeltaExposureCard";
 import SettingsCard from "../components/SettingsCard";
 import { buildSnapshot } from "../lib/buildSnapshot";
 import type {
@@ -183,6 +184,8 @@ export default function Home() {
           />
         </div>
       )}
+
+      {current && <DeltaExposureCard snapshot={current} />}
     </main>
   );
 }
