@@ -1,6 +1,7 @@
 import { classifyHoldings } from "./classifyHoldings";
 import { classifyOptionCombos } from "./classifyOptionCombos";
 import { calculateTargets } from "./calculateTargets";
+import { calculateDeltaExposures, calculateOptionRiskSummary } from "./optionRisk";
 import type {
   FidelityRow,
   PortfolioSnapshot,
@@ -23,9 +24,8 @@ export function buildSnapshot(
   manualCash: number = 0
 ): PortfolioSnapshot {
   const totalValue = calcTotal(rows) + manualCash;
-  const classified = classifyHoldings(
-    rows.filter((r) => r.symbol !== "Pending activity")
-  );
+  const positionRows = rows.filter((r) => r.symbol !== "Pending activity");
+  const classified = classifyHoldings(positionRows);
   const targets = calculateTargets(age, hasIncome);
 
   const pct = (numerator: number, denom: number) =>
@@ -100,9 +100,7 @@ export function buildSnapshot(
     0
   );
 
-  // Shown single-leg categories only (LEAPS Call / Sell Put / Sell Call), each
-  // collapsed to a per-underlying contract tally. Synthetic longs and spreads
-  // are detected purely to exclude their legs, and are not displayed.
+  // Legacy single-leg categories are retained in snapshot data for compatibility.
   const optionsItems: BucketItem[] = classifyOptionCombos(optionsHoldings).map(
     (c) => ({
       label: c.label,
@@ -112,6 +110,13 @@ export function buildSnapshot(
       contracts: c.contracts,
       tickers: c.tickers,
     })
+  );
+
+  const optionBudgetBase = totalValue * ((targets.wheel + targets.leaps) / 100);
+  const optionRisk = calculateOptionRiskSummary(
+    optionsHoldings,
+    optionBudgetBase,
+    date
   );
 
   const buckets: BucketData[] = [
@@ -138,8 +143,15 @@ export function buildSnapshot(
       currentPctOfTotal: pct(optionsValue, totalValue),
       targetPctOfTotal: targets.wheel + targets.leaps,
       items: optionsItems,
+      optionRisk,
     },
   ];
 
-  return { totalValue, buckets, date, fileName };
+  return {
+    totalValue,
+    buckets,
+    date,
+    fileName,
+    deltaExposures: calculateDeltaExposures(rows, totalValue),
+  };
 }
