@@ -1,5 +1,6 @@
 import type {
   BudgetUsageBar,
+  BullishAllocation,
   ClassifiedHolding,
   DeltaExposureRow,
   FidelityRow,
@@ -337,4 +338,80 @@ export function calculateDeltaExposures(rows: FidelityRow[], totalValue: number)
     })
     .filter((row) => row.deltaDollarExposure !== 0 || row.hasIncompleteData)
     .sort((a, b) => Math.abs(b.deltaDollarExposure) - Math.abs(a.deltaDollarExposure));
+}
+
+export const ALLOCATION_CONFIG = {
+  stocksMinPct: 65,
+  stocksMaxPct: 70,
+  cashMinPct: 10,
+  cashMaxPct: 15,
+  bullishPct: 20,
+  sellPutMultiplier: 1.3,
+};
+
+export function calculateBullishAllocation(
+  holdings: ClassifiedHolding[], totalValue: number, cashValue: number
+): BullishAllocation {
+  const legs = holdings.map((h, i) => parseOptionLeg(h, i))
+    .filter((leg): leg is ParsedOptionLeg => Boolean(leg));
+  const remaining = new Map(legs.map((leg) => [leg.id, leg.absQty]));
+  const bySymbol = new Map<string, { symbol: string; value: number; contracts: number }>();
+  const add = (leg: ParsedOptionLeg, qty: number, value: number) => {
+    const entry = bySymbol.get(leg.underlying) ?? { symbol: leg.underlying, value: 0, contracts: 0 };
+    entry.value += value;
+    entry.contracts += qty;
+    bySymbol.set(leg.underlying, entry);
+  };
+
+  // Synthetic longs take priority over vertical spreads, with partial quantities consumed.
+  for (const call of legs.filter((l) => l.right === "CALL" && l.qty > 0)) {
+    for (const put of legs.filter((l) => l.right === "PUT" && l.qty < 0)) {
+      if (call.underlying !== put.underlying || call.expiryKey !== put.expiryKey ||
+          call.strike !== put.strike || call.multiplier !== put.multiplier) continue;
+      const qty = Math.min(remaining.get(call.id) ?? 0, remaining.get(put.id) ?? 0);
+      consume(remaining, call, qty);
+      consume(remaining, put, qty);
+    }
+  }
+
+  const longs = legs.filter((l) => l.right === "CALL" && l.qty > 0).sort((a, b) => a.strike - b.strike);
+  const shorts = legs.filter((l) => l.right === "CALL" && l.qty < 0).sort((a, b) => a.strike - b.strike);
+  for (const long of longs) {
+    for (const short of shorts) {
+      if (long.underlying !== short.underlying || long.expiryKey !== short.expiryKey ||
+          long.multiplier !== short.multiplier || long.strike >= short.strike) continue;
+      const qty = Math.min(remaining.get(long.id) ?? 0, remaining.get(short.id) ?? 0);
+      if (qty <= 0) continue;
+      add(long, qty, Math.abs(proportionalValue(long, qty)) - Math.abs(proportionalValue(short, qty)));
+      consume(remaining, long, qty);
+      consume(remaining, short, qty);
+    }
+  }
+  // Recognized bearish call verticals are not bullish holdings.
+  for (const long of longs) {
+    for (const short of shorts) {
+      if (long.underlying !== short.underlying || long.expiryKey !== short.expiryKey ||
+          long.multiplier !== short.multiplier || long.strike <= short.strike) continue;
+      const qty = Math.min(remaining.get(long.id) ?? 0, remaining.get(short.id) ?? 0);
+      consume(remaining, long, qty);
+      consume(remaining, short, qty);
+    }
+  }
+  for (const long of longs) {
+    const qty = remaining.get(long.id) ?? 0;
+    if (qty > 0) add(long, qty, Math.abs(proportionalValue(long, qty)));
+  }
+  const ranked = Array.from(bySymbol.values()).sort((a, b) => b.value - a.value);
+  const callValue = ranked.reduce((sum, row) => sum + row.value, 0);
+  const assignment = legs.filter((l) => l.right === "PUT" && l.qty < 0)
+    .reduce((sum, leg) => sum + leg.strike * leg.multiplier * leg.absQty, 0);
+  const callMax = totalValue * ALLOCATION_CONFIG.bullishPct / 100;
+  const putMax = cashValue * ALLOCATION_CONFIG.sellPutMultiplier;
+  return {
+    holdings: ranked,
+    sellPut: buildBudgetBar("sell-put", "Sell Put 抵押", assignment, cashValue, putMax, 0,
+      `${formatDollar(cashValue)} × 130% = ${formatDollar(putMax)}`),
+    calls: buildBudgetBar("leaps-call", "LEAPS Call / 看涨期权", callValue, callMax, callMax,
+      ALLOCATION_CONFIG.bullishPct / 100, `${formatDollar(callMax)}【20%】`, "净市值"),
+  };
 }
