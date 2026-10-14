@@ -27,10 +27,11 @@ function titleColorClass(current: number, target: number): string {
 
 interface StockBucketCardProps {
   bucket: BucketData;
+  cash?: BucketData;
 }
 
 /** Block 1 — 正股定投仓: every ticker (cash+margin merged), sorted by value. */
-export default function StockBucketCard({ bucket }: StockBucketCardProps) {
+export default function StockBucketCard({ bucket, cash }: StockBucketCardProps) {
   const items = bucket.items.filter((i) => i.value > 0);
 
   // Pie stays readable: top 6 tickers as slices, the rest folded into 其他.
@@ -95,7 +96,7 @@ export default function StockBucketCard({ bucket }: StockBucketCardProps) {
             </p>
             <p className="text-xs text-gray-500 mt-1">占整体仓位</p>
             <p className="text-xs text-gray-500 mt-1">
-              目标 {bucket.targetPctOfTotal.toFixed(1)}%
+              目标 65–70%
             </p>
             <p className="text-xl text-gray-200 mt-2 font-mono">
               {formatDollar(bucket.totalValue)}
@@ -134,6 +135,28 @@ export default function StockBucketCard({ bucket }: StockBucketCardProps) {
             );
           })}
         </div>
+      </div>
+
+      <div className="mt-5 border-t border-gray-700 pt-4">
+        <div className="flex flex-wrap justify-between gap-2 text-sm text-gray-300">
+          <span>正股占比 · 目标 65–70%</span>
+          <span className="font-mono">{bucket.currentPctOfTotal.toFixed(1)}%</span>
+        </div>
+        <div className="mt-2 h-2.5 rounded-full bg-gray-800 overflow-hidden">
+          <div className="h-full bg-blue-500" style={{ width: `${Math.min(Math.max(bucket.currentPctOfTotal, 0), 100)}%` }} />
+        </div>
+        {cash && (
+          <div className="mt-4">
+            <div className="flex flex-wrap justify-between gap-2 text-sm text-gray-300">
+              <span>现金 Cash · 目标 10–15%</span>
+              <span className="font-mono text-emerald-300">{formatDollar(cash.totalValue)} · {cash.currentPctOfTotal.toFixed(1)}%</span>
+            </div>
+            <div className="mt-2 h-2.5 rounded-full bg-gray-800 overflow-hidden">
+              <div className="h-full bg-emerald-500" style={{ width: `${Math.min(Math.max(cash.currentPctOfTotal, 0), 100)}%` }} />
+            </div>
+            <p className="mt-2 text-xs text-gray-500">正股 + 现金：{(bucket.currentPctOfTotal + cash.currentPctOfTotal).toFixed(1)}% · 目标 80%</p>
+          </div>
+        )}
       </div>
     </div>
   );
