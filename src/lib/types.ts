@@ -134,6 +134,7 @@ export interface BucketData {
   targetPctOfTotal: number;
   items: BucketItem[];
   optionRisk?: OptionRiskSummary;
+  bullishAllocation?: BullishAllocation;
 }
 
 /** Full parsed portfolio snapshot */
@@ -151,4 +152,10 @@ export interface PortfolioComparison {
   previous: PortfolioSnapshot;
   valueDelta: number;
   valueDeltaPercent: number;
+}
+
+export interface BullishAllocation {
+  sellPut: BudgetUsageBar;
+  calls: BudgetUsageBar;
+  holdings: { symbol: string; value: number; contracts: number }[];
 }
