@@ -6,7 +6,6 @@ import PortfolioOverview from "../components/PortfolioOverview";
 import StockBucketCard from "../components/StockBucketCard";
 import OptionsCashCard from "../components/OptionsCashCard";
 import DeltaExposureCard from "../components/DeltaExposureCard";
-import SettingsCard from "../components/SettingsCard";
 import { buildSnapshot } from "../lib/buildSnapshot";
 import type {
   FidelityRow,
@@ -20,8 +19,8 @@ export default function Home() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [broker, setBroker] = useState<Broker>("fidelity");
   const [showProgress, setShowProgress] = useState(true);
-  const [age, setAge] = useState(25);
-  const [hasIncome, setHasIncome] = useState(true);
+  const age = 25;
+  const hasIncome = true;
 
   const handleFilesReady = useCallback((f: UploadedFile[]) => {
     setFiles(f);
@@ -148,13 +147,6 @@ export default function Home() {
         </div>
       )}
 
-      <SettingsCard
-        age={age}
-        hasIncome={hasIncome}
-        onAgeChange={setAge}
-        onIncomeChange={setHasIncome}
-      />
-
       {!current && (
         <div className="text-center text-gray-600 py-20">
           上传持仓 CSV 文件开始
@@ -178,6 +170,7 @@ export default function Home() {
         >
           <StockBucketCard
             bucket={current.buckets.find((b) => b.key === "safe-side")!}
+            cash={current.buckets.find((b) => b.key === "cash")!}
           />
           <OptionsCashCard
             cash={current.buckets.find((b) => b.key === "cash")!}
