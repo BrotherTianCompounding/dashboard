@@ -1,7 +1,6 @@
 import { classifyHoldings } from "./classifyHoldings";
 import { classifyOptionCombos } from "./classifyOptionCombos";
-import { calculateTargets } from "./calculateTargets";
-import { calculateDeltaExposures, calculateOptionRiskSummary } from "./optionRisk";
+import { calculateDeltaExposures, calculateOptionRiskSummary, calculateBullishAllocation } from "./optionRisk";
 import type {
   FidelityRow,
   PortfolioSnapshot,
@@ -26,7 +25,9 @@ export function buildSnapshot(
   const totalValue = calcTotal(rows) + manualCash;
   const positionRows = rows.filter((r) => r.symbol !== "Pending activity");
   const classified = classifyHoldings(positionRows);
-  const targets = calculateTargets(age, hasIncome);
+  void age;
+  void hasIncome;
+  const targets = { safeSide: 67.5, cash: 12.5, wheel: 0, leaps: 20 };
 
   const pct = (numerator: number, denom: number) =>
     denom > 0 ? (numerator / denom) * 100 : 0;
@@ -119,6 +120,8 @@ export function buildSnapshot(
     date
   );
 
+  const bullishAllocation = calculateBullishAllocation(optionsHoldings, totalValue, cashValue);
+
   const buckets: BucketData[] = [
     {
       key: "safe-side",
@@ -139,11 +142,12 @@ export function buildSnapshot(
     {
       key: "options",
       label: "期权仓 Options",
-      totalValue: optionsValue,
-      currentPctOfTotal: pct(optionsValue, totalValue),
+      totalValue: bullishAllocation.calls.currentValue,
+      currentPctOfTotal: pct(bullishAllocation.calls.currentValue, totalValue),
       targetPctOfTotal: targets.wheel + targets.leaps,
       items: optionsItems,
       optionRisk,
+      bullishAllocation,
     },
   ];
 
