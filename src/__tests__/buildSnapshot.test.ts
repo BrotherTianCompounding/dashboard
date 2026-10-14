@@ -146,18 +146,18 @@ describe("buildSnapshot — options bucket (shown single-leg categories)", () =>
     const sellPut = options.items[0];
     expect(sellPut.contracts).toBe(1);
     expect(sellPut.tickers).toEqual([{ underlying: "RKLB", contracts: 1, value: 1605 }]);
-    // total still counts every option (incl. excluded combos), abs market value
-    expect(options.totalValue).toBeCloseTo(20540 + 6600 + 570 + 450 + 1605);
+    // Only the bullish call vertical contributes to the displayed bucket.
+    expect(options.totalValue).toBeCloseTo(120);
   });
 
-  it("options bucket value is the sum of absolute position values", () => {
+  it("options bucket value excludes standalone short puts", () => {
     const rows: FidelityRow[] = [
       row({ symbol: "-AAPL", description: "AAPL JAN 16 2026 $150 PUT", quantity: -1, currentValue: -500 }),
       row({ symbol: "AAPL300118C00100000", description: "AAPL JAN 18 2030 $100 CALL", quantity: 1, currentValue: 4500 }),
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const options = snap.buckets.find((b) => b.key === "options")!;
-    expect(options.totalValue).toBeCloseTo(5000);
+    expect(options.totalValue).toBeCloseTo(4500);
   });
 });
 
@@ -200,7 +200,7 @@ describe("buildSnapshot — invariants", () => {
     expect(sum).toBeCloseTo(snap.totalValue, 0);
   });
 
-  it("with short options, bucket sum exceeds totalValue by 2× short mark (Math.abs side effect)", () => {
+  it("short-put liabilities remain in NAV but are excluded from bullish bucket", () => {
     // Short put at -500: totalValue includes -500, options bucket adds abs(500).
     // Sum overshoots by 1000 = 2 × 500. Documented known behavior under Math.abs semantics.
     const rows: FidelityRow[] = [
@@ -210,44 +210,44 @@ describe("buildSnapshot — invariants", () => {
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const sum = snap.buckets.reduce((s, b) => s + b.totalValue, 0);
-    expect(sum - snap.totalValue).toBeCloseTo(1000, 0);
+    expect(sum - snap.totalValue).toBeCloseTo(500, 0);
   });
 });
 
-describe("buildSnapshot — age/income drive targets", () => {
-  it("age 25 → safeSide target 45%", () => {
+describe("buildSnapshot — fixed targets ignore age/income", () => {
+  it("age 25 uses fixed stock target", () => {
     const rows: FidelityRow[] = [
       row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 50000 }),
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 25, true);
     const dca = snap.buckets.find((b) => b.key === "safe-side")!;
-    expect(dca.targetPctOfTotal).toBe(45);
+    expect(dca.targetPctOfTotal).toBe(67.5);
   });
 
-  it("age 38 → safeSide target 58%", () => {
+  it("age 38 uses the same fixed stock target", () => {
     const rows: FidelityRow[] = [
       row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 50000 }),
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const dca = snap.buckets.find((b) => b.key === "safe-side")!;
-    expect(dca.targetPctOfTotal).toBe(58);
+    expect(dca.targetPctOfTotal).toBe(67.5);
   });
 
-  it("hasIncome=true → cash target 5%", () => {
+  it("income uses fixed cash target", () => {
     const rows: FidelityRow[] = [
       row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 5000, currentValue: 5000 }),
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 25, true);
     const cash = snap.buckets.find((b) => b.key === "cash")!;
-    expect(cash.targetPctOfTotal).toBe(5);
+    expect(cash.targetPctOfTotal).toBe(12.5);
   });
 
-  it("hasIncome=false → cash target 10%", () => {
+  it("no income uses the same fixed cash target", () => {
     const rows: FidelityRow[] = [
       row({ symbol: "SPAXX", description: "FIDELITY GOVERNMENT", quantity: 5000, currentValue: 5000 }),
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 25, false);
     const cash = snap.buckets.find((b) => b.key === "cash")!;
-    expect(cash.targetPctOfTotal).toBe(10);
+    expect(cash.targetPctOfTotal).toBe(12.5);
   });
 });
