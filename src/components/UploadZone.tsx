@@ -38,34 +38,28 @@ const PARSERS: Record<Broker, (csv: string) => FidelityRow[]> = {
 export default function UploadZone({ onFilesReady, broker }: UploadZoneProps) {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const processFiles = useCallback(
-    (fileList: FileList) => {
-      const toProcess = Array.from(fileList).slice(0, 2); // max 2 files
-      const results: UploadedFile[] = [];
+    async (fileList: FileList) => {
+      const toProcess = Array.from(fileList).slice(0, 2);
+      if (toProcess.length === 0) return;
+      setError(null);
       const parse = PARSERS[broker] ?? parseFidelityCsv;
-
-      let remaining = toProcess.length;
-      toProcess.forEach((file) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const text = e.target?.result as string;
-          const rows = parse(text);
-          const date = parseDateFromFilename(file.name);
-          results.push({ name: file.name, date, rows });
-          remaining--;
-          if (remaining === 0) {
-            // Sort by date: older first, newer second
-            results.sort((a, b) => {
-              if (!a.date || !b.date) return 0;
-              return a.date.getTime() - b.date.getTime();
-            });
-            setFiles(results);
-            onFilesReady(results);
+      try {
+        const results = await Promise.all(toProcess.map(async (file) => {
+          const rows = parse(await file.text());
+          if (rows.length === 0) {
+            throw new Error("未识别到持仓数据，请确认券商选项与 CSV 导出格式。");
           }
-        };
-        reader.readAsText(file);
-      });
+          return { name: file.name, date: parseDateFromFilename(file.name), rows };
+        }));
+        results.sort((a, b) => !a.date || !b.date ? 0 : a.date.getTime() - b.date.getTime());
+        setFiles(results);
+        onFilesReady(results);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "文件读取失败，请重新上传 CSV。");
+      }
     },
     [onFilesReady, broker]
   );
@@ -91,12 +85,14 @@ export default function UploadZone({ onFilesReady, broker }: UploadZoneProps) {
   );
 
   const handleReset = useCallback(() => {
+    setError(null);
     setFiles([]);
     onFilesReady([]);
   }, [onFilesReady]);
 
   return (
     <div className="mb-8">
+      {error && <p role="alert" className="mb-3 text-sm text-red-300">{error}</p>}
       {files.length === 0 ? (
         <label
           className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
