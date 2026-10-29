@@ -247,6 +247,11 @@ function getUnderlyingPrice(row: FidelityRow): number | null {
   return Number.isFinite(price) && price > 0 ? price : null;
 }
 
+const EXPOSURE_GROUPS: Record<string, string> = {
+  QQQ: "QQQ", QQQM: "QQQ",
+  VOO: "VOO", SPY: "VOO", FXAIX: "VOO",
+};
+
 export function calculateDeltaExposures(rows: FidelityRow[], totalValue: number): DeltaExposureRow[] {
   const bySymbol = new Map<string, DeltaExposureRow>();
 
@@ -336,6 +341,25 @@ export function calculateDeltaExposures(rows: FidelityRow[], totalValue: number)
         portfolioPct: totalValue > 0 ? (deltaDollarExposure / totalValue) * 100 : 0,
       };
     })
+    // Calculate using each instrument's own price before merging dollar exposures.
+    .reduce<DeltaExposureRow[]>((groups, row) => {
+      const symbol = EXPOSURE_GROUPS[row.symbol.toUpperCase()] ?? row.symbol;
+      const existing = groups.find((group) => group.symbol === symbol);
+      if (!existing) {
+        groups.push({ ...row, symbol });
+      } else {
+        existing.stockExposure += row.stockExposure;
+        existing.optionExposure += row.optionExposure;
+        existing.deltaDollarExposure += row.deltaDollarExposure;
+        existing.portfolioPct = totalValue > 0 ? existing.deltaDollarExposure / totalValue * 100 : 0;
+        existing.hasIncompleteData ||= row.hasIncompleteData;
+        existing.hasEstimatedExposure ||= row.hasEstimatedExposure;
+        // Different funds have no common share unit or single underlying price.
+        existing.deltaShares = 0;
+        existing.underlyingPrice = null;
+      }
+      return groups;
+    }, [])
     .filter((row) => row.deltaDollarExposure !== 0 || row.hasIncompleteData)
     .sort((a, b) => Math.abs(b.deltaDollarExposure) - Math.abs(a.deltaDollarExposure));
 }
