@@ -145,3 +145,40 @@ describe("missing-delta assignment estimates", () => {
     expect(exposures[0].hasEstimatedExposure).toBe(false);
   });
 });
+
+describe("exposure fund families", () => {
+  it("merges dollar exposures after using each fund's own price and reranks", () => {
+    const exposures = calculateDeltaExposures([
+      row({ symbol: "QQQ", quantity: 2, lastPrice: 500, currentValue: 1000 }),
+      row({ symbol: "QQQM", quantity: 5, lastPrice: 200, currentValue: 1000 }),
+      row({ symbol: "QQQM-option", description: "QQQM JAN 16 2027 $200 CALL", quantity: 1, currentValue: 300, delta: 0.5, underlyingPrice: 200 }),
+      row({ symbol: "VOO", quantity: 1, lastPrice: 600, currentValue: 600 }),
+      row({ symbol: "SPY", quantity: 2, lastPrice: 550, currentValue: 1100 }),
+      row({ symbol: "FXAIX", quantity: 10, lastPrice: 250, currentValue: 2500 }),
+      row({ symbol: "OTHER", quantity: 1, lastPrice: 5000, currentValue: 5000 }),
+    ], 20000);
+    expect(exposures.map((r) => r.symbol)).toEqual(["QQQ", "OTHER", "VOO"]);
+    expect(exposures[0].stockExposure).toBe(2000);
+    expect(exposures[0].optionExposure).toBe(10000);
+    expect(exposures[0].deltaDollarExposure).toBe(12000);
+    expect(exposures[0].portfolioPct).toBe(60);
+    expect(exposures[2].deltaDollarExposure).toBe(4200);
+    expect(exposures[2].portfolioPct).toBe(21);
+  });
+
+  it("nets opposite directions and preserves estimate and missing-data flags", () => {
+    const exposures = calculateDeltaExposures([
+      row({ symbol: "QQQ", quantity: 1, lastPrice: 500, currentValue: 500 }),
+      row({ description: "QQQM JAN 16 2027 $200 CALL", quantity: -1, currentValue: -100, delta: 0.5, underlyingPrice: 200 }),
+      row({ description: "SPY JAN 16 2027 $550 CALL", quantity: 1, currentValue: 300 }),
+      row({ description: "VOO JAN 16 2027 $600 CALL", quantity: -1, currentValue: -100 }),
+    ], 10000);
+    expect(exposures[0].symbol).toBe("QQQ");
+    expect(exposures[0].deltaDollarExposure).toBe(-9500);
+    expect(exposures[0].portfolioPct).toBe(-95);
+    const voo = exposures.find((r) => r.symbol === "VOO")!;
+    expect(voo.optionExposure).toBe(300);
+    expect(voo.hasEstimatedExposure).toBe(true);
+    expect(voo.hasIncompleteData).toBe(true);
+  });
+});
