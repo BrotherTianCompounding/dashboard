@@ -62,7 +62,7 @@ export interface OptionBudgetConfig {
 }
 
 export interface BudgetUsageBar {
-  key: "sell-put" | "leaps-call" | "tactical";
+  key: "sell-put" | "leaps-call" | "tactical" | "buy-call" | "sell-call" | "buy-put";
   label: string;
   currentValue: number;
   baseBudget: number;
@@ -135,6 +135,7 @@ export interface BucketData {
   items: BucketItem[];
   optionRisk?: OptionRiskSummary;
   bullishAllocation?: BullishAllocation;
+  optionLegBars?: BudgetUsageBar[];
 }
 
 /** Full parsed portfolio snapshot */
