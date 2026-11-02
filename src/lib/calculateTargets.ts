@@ -6,8 +6,9 @@ export function calculateTargets(
   age: number,
   hasIncome: boolean
 ): TargetAllocation {
-  const safeSide = Math.min(age + 20, SAFE_SIDE_CAP);
-  const cash = hasIncome ? 5 : 10;
+  void hasIncome;
+  const safeSide = Math.max(0, Math.min(age + 20, SAFE_SIDE_CAP));
+  const cash = 10;
   const options = 100 - safeSide - cash;
   const wheel = options * 0.8;
   const leaps = options * 0.2;
