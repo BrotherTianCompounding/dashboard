@@ -1,6 +1,7 @@
+import { calculateTargets } from "./calculateTargets";
 import { classifyHoldings } from "./classifyHoldings";
 import { classifyOptionCombos } from "./classifyOptionCombos";
-import { calculateDeltaExposures, calculateOptionRiskSummary, calculateBullishAllocation } from "./optionRisk";
+import { calculateDeltaExposures, calculateOptionRiskSummary, calculateBullishAllocation, calculateOptionLegBars } from "./optionRisk";
 import type {
   FidelityRow,
   PortfolioSnapshot,
@@ -25,9 +26,7 @@ export function buildSnapshot(
   const totalValue = calcTotal(rows) + manualCash;
   const positionRows = rows.filter((r) => r.symbol !== "Pending activity");
   const classified = classifyHoldings(positionRows);
-  void age;
-  void hasIncome;
-  const targets = { safeSide: 67.5, cash: 12.5, wheel: 0, leaps: 20 };
+  const targets = calculateTargets(age, hasIncome);
 
   const pct = (numerator: number, denom: number) =>
     denom > 0 ? (numerator / denom) * 100 : 0;
@@ -43,6 +42,7 @@ export function buildSnapshot(
     VOO: "VOO",
     SPY: "VOO",
     FXAIX: "VOO",
+    FFAIX: "VOO",
   };
   const MIN_ITEM_PCT = 1;
 
@@ -148,6 +148,7 @@ export function buildSnapshot(
       items: optionsItems,
       optionRisk,
       bullishAllocation,
+      optionLegBars: calculateOptionLegBars(optionsHoldings, optionBudgetBase, totalValue * targets.cash / 100),
     },
   ];
 
