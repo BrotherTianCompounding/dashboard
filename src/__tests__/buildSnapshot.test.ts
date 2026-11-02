@@ -214,14 +214,14 @@ describe("buildSnapshot — invariants", () => {
   });
 });
 
-describe("buildSnapshot — fixed targets ignore age/income", () => {
+describe("buildSnapshot — age-based stocks and fixed cash", () => {
   it("age 25 uses fixed stock target", () => {
     const rows: FidelityRow[] = [
       row({ symbol: "QQQM", description: "INVESCO NASDAQ 100 ETF", quantity: 100, currentValue: 50000 }),
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 25, true);
     const dca = snap.buckets.find((b) => b.key === "safe-side")!;
-    expect(dca.targetPctOfTotal).toBe(67.5);
+    expect(dca.targetPctOfTotal).toBe(45);
   });
 
   it("age 38 uses the same fixed stock target", () => {
@@ -230,7 +230,7 @@ describe("buildSnapshot — fixed targets ignore age/income", () => {
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 38, true);
     const dca = snap.buckets.find((b) => b.key === "safe-side")!;
-    expect(dca.targetPctOfTotal).toBe(67.5);
+    expect(dca.targetPctOfTotal).toBe(58);
   });
 
   it("income uses fixed cash target", () => {
@@ -239,7 +239,7 @@ describe("buildSnapshot — fixed targets ignore age/income", () => {
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 25, true);
     const cash = snap.buckets.find((b) => b.key === "cash")!;
-    expect(cash.targetPctOfTotal).toBe(12.5);
+    expect(cash.targetPctOfTotal).toBe(10);
   });
 
   it("no income uses the same fixed cash target", () => {
@@ -248,6 +248,6 @@ describe("buildSnapshot — fixed targets ignore age/income", () => {
     ];
     const snap = buildSnapshot(rows, "test.csv", null, 25, false);
     const cash = snap.buckets.find((b) => b.key === "cash")!;
-    expect(cash.targetPctOfTotal).toBe(12.5);
+    expect(cash.targetPctOfTotal).toBe(10);
   });
 });
