@@ -27,7 +27,9 @@ interface OptionsCashCardProps {
 
 function BudgetBar({ bar }: { bar: BudgetUsageBar }) {
   const fillColor = bar.isOver ? "bg-red-500" : BAR_COLORS[bar.key];
-  const currentText = bar.status === "invalid-budget"
+  const currentText = bar.status === "no-limit"
+    ? `当前：${formatDollar(bar.currentValue)}`
+    : bar.status === "invalid-budget"
     ? "预算基数异常"
     : bar.overAmount > 0
       ? `当前：${formatDollar(bar.currentValue)}（+${formatDollar(bar.overAmount)}，超额${formatPct(bar.overPercent)}）`
@@ -48,7 +50,7 @@ function BudgetBar({ bar }: { bar: BudgetUsageBar }) {
           <p className="mt-0.5 text-[11px] text-gray-500">额度 {bar.detail}</p>
         </div>
         <span className={`shrink-0 text-xs font-mono ${bar.isOver ? "text-red-300" : "text-gray-300"}`}>
-          {formatPct(bar.percentUsed)}
+          {bar.status === "no-limit" ? "无额度限制" : formatPct(bar.percentUsed)}
         </span>
       </div>
 
