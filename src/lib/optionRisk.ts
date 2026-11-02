@@ -439,3 +439,37 @@ export function calculateBullishAllocation(
       ALLOCATION_CONFIG.bullishPct / 100, `${formatDollar(callMax)}【20%】`, "净市值"),
   };
 }
+
+/** Each option leg belongs to exactly one direction; combinations do not hide legs. */
+export function calculateOptionLegBars(
+  holdings: ClassifiedHolding[], optionBudget: number, cashBudget: number
+): BudgetUsageBar[] {
+  const totals = { "sell-put": 0, "buy-call": 0, "sell-call": 0, "buy-put": 0 };
+  for (const [index, holding] of holdings.entries()) {
+    const leg = parseOptionLeg(holding, index);
+    if (!leg || leg.qty === 0) continue;
+    if (leg.right === "PUT" && leg.qty < 0) {
+      totals["sell-put"] += leg.strike * leg.multiplier * leg.absQty;
+    } else if (leg.right === "CALL" && leg.qty > 0) {
+      totals["buy-call"] += Math.abs(leg.currentValue);
+    } else if (leg.right === "CALL" && leg.qty < 0) {
+      totals["sell-call"] += Math.abs(leg.currentValue);
+    } else {
+      totals["buy-put"] += Math.abs(leg.currentValue);
+    }
+  }
+  const definitions = [
+    ["sell-put", "Sell Put 卖出看跌"],
+    ["buy-call", "Buy Call 买入看涨"],
+    ["sell-call", "Sell Call 卖出看涨"],
+    ["buy-put", "Buy Put 买入看跌"],
+  ] as const;
+  return definitions.map(([key, label]) => {
+    const max = key === "sell-put" ? optionBudget + cashBudget : optionBudget;
+    const detail = key === "sell-put"
+      ? `${formatDollar(optionBudget)} + ${formatDollar(cashBudget)} = ${formatDollar(max)}`
+      : formatDollar(max);
+    return buildBudgetBar(key, label, totals[key], max, max, 0, detail,
+      key === "sell-put" ? "接股金额" : key === "sell-call" ? "回补市值" : "持仓市值");
+  });
+}
