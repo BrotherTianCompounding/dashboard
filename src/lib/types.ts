@@ -75,7 +75,7 @@ export interface BudgetUsageBar {
   isOver: boolean;
   overAmount: number;
   overPercent: number | null;
-  status: "ok" | "invalid-budget";
+  status: "ok" | "invalid-budget" | "no-limit";
 }
 
 export interface OptionRiskSummary {
