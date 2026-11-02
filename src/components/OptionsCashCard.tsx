@@ -15,6 +15,9 @@ const BAR_COLORS: Record<BudgetUsageBar["key"], string> = {
   "sell-put": "bg-emerald-500",
   "leaps-call": "bg-blue-500",
   tactical: "bg-cyan-500",
+  "buy-call": "bg-blue-500",
+  "sell-call": "bg-amber-500",
+  "buy-put": "bg-pink-500",
 };
 
 interface OptionsCashCardProps {
@@ -31,7 +34,7 @@ function BudgetBar({ bar }: { bar: BudgetUsageBar }) {
       : `当前：${formatDollar(bar.currentValue)}（${formatPct(bar.percentUsed)}）`;
 
   return (
-    <div className="rounded-lg bg-[#101521] p-3">
+    <div className="py-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -65,33 +68,13 @@ function BudgetBar({ bar }: { bar: BudgetUsageBar }) {
 
 
 export default function OptionsCashCard({ options }: OptionsCashCardProps) {
-  const allocation = options.bullishAllocation;
-  if (!allocation) return <div className="p-5 text-red-300">仓位数据缺失</div>;
-  const maxValue = Math.max(1, ...allocation.holdings.map((row) => Math.abs(row.value)));
+  const bars = options.optionLegBars;
   return (
     <div className="bg-[#1a1f2e] rounded-xl p-5 min-w-0">
-      <h2 className="text-sm font-medium text-gray-400 mb-4">期权仓 Options</h2>
-      <BudgetBar bar={allocation.sellPut} />
-      <div className="mt-5 border-t border-gray-700 pt-5">
-        <BudgetBar bar={allocation.calls} />
-        <div className="mt-4 space-y-3">
-          {allocation.holdings.length === 0 && <p className="text-sm text-gray-500">暂无看涨期权持仓</p>}
-          {allocation.holdings.map((row, index) => (
-            <div key={row.symbol}>
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-gray-500 w-4">{index + 1}</span>
-                <span className="font-semibold text-gray-100">{row.symbol}</span>
-                <span className="text-gray-500">{row.contracts} 张</span>
-                <span className="ml-auto font-mono text-cyan-300">{formatDollar(row.value)}</span>
-              </div>
-              <div className="mt-1 h-2 rounded-full bg-gray-800 overflow-hidden">
-                <div className={row.value < 0 ? "h-full bg-red-500" : "h-full bg-blue-500"}
-                  style={{ width: `${Math.min(Math.abs(row.value) / maxValue * 100, 100)}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <h2 className="text-sm font-medium text-gray-400 mb-1">期权仓 Options · 目标 {options.targetPctOfTotal.toFixed(1)}%</h2>
+      {bars ? <div className="divide-y divide-gray-700/60">
+        {bars.map((bar) => <BudgetBar key={bar.key} bar={bar} />)}
+      </div> : <p className="text-sm text-red-300">仓位数据缺失</p>}
     </div>
   );
 }
