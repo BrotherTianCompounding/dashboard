@@ -465,11 +465,12 @@ export function calculateOptionLegBars(
     ["buy-put", "Buy Put 买入看跌"],
   ] as const;
   return definitions.map(([key, label]) => {
-    const max = key === "sell-put" ? optionBudget + cashBudget : optionBudget;
+    const max = key === "sell-put" ? optionBudget + cashBudget : key === "sell-call" ? 0 : optionBudget / 2;
     const detail = key === "sell-put"
       ? `${formatDollar(optionBudget)} + ${formatDollar(cashBudget)} = ${formatDollar(max)}`
-      : formatDollar(max);
-    return buildBudgetBar(key, label, totals[key], max, max, 0, detail,
+      : key === "sell-call" ? "不设上限" : `${formatDollar(optionBudget)} × 50% = ${formatDollar(max)}`;
+    const bar = buildBudgetBar(key, label, totals[key], max, max, 0, detail,
       key === "sell-put" ? "接股金额" : key === "sell-call" ? "回补市值" : "持仓市值");
+    return key === "sell-call" ? { ...bar, status: "no-limit" as const } : bar;
   });
 }
