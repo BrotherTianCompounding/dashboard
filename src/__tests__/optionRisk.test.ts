@@ -1,4 +1,4 @@
-import { calculateDeltaExposures, calculateOptionRiskSummary } from "../lib/optionRisk";
+import { calculateDeltaExposures, calculateOptionRiskSummary, calculateOptionLegBars } from "../lib/optionRisk";
 import type { ClassifiedHolding, FidelityRow } from "../lib/types";
 
 function holding(overrides: Partial<ClassifiedHolding>): ClassifiedHolding {
@@ -180,5 +180,33 @@ describe("exposure fund families", () => {
     expect(voo.optionExposure).toBe(300);
     expect(voo.hasEstimatedExposure).toBe(true);
     expect(voo.hasIncompleteData).toBe(true);
+  });
+});
+
+describe("four directional option bars", () => {
+  it("includes every combination leg exactly once using direction-specific values", () => {
+    const bars = calculateOptionLegBars([
+      holding({ description: "XYZ JAN 15 2027 $100 CALL", quantity: 2, currentValue: 2000 }),
+      holding({ description: "XYZ JAN 15 2027 $100 PUT", quantity: -1, currentValue: -500 }),
+      holding({ description: "XYZ JAN 15 2027 $120 CALL", quantity: -1, currentValue: -300 }),
+      holding({ description: "XYZ JAN 15 2027 $80 PUT", quantity: 1, currentValue: 100 }),
+    ], 30000, 10000);
+    expect(bars.map((b) => b.key)).toEqual(["sell-put", "buy-call", "sell-call", "buy-put"]);
+    expect(bars.map((b) => b.currentValue)).toEqual([10000, 2000, 300, 100]);
+    expect(bars.map((b) => b.maxValue)).toEqual([40000, 30000, 30000, 30000]);
+  });
+  it("turns red at capacity, reports overage and handles zero budgets", () => {
+    const bar = calculateOptionLegBars([
+      holding({ description: "XYZ JAN 15 2027 $400 PUT", quantity: -1, currentValue: -200 }),
+    ], 30000, 10000)[0];
+    expect(bar.isOver).toBe(true);
+    expect(bar.visualPercent).toBe(100);
+    expect(bar.overAmount).toBe(0);
+    const over = calculateOptionLegBars([
+      holding({ description: "XYZ JAN 15 2027 $500 PUT", quantity: -1, currentValue: -200 }),
+    ], 30000, 10000)[0];
+    expect(over.overAmount).toBe(10000);
+    expect(over.overPercent).toBe(25);
+    expect(calculateOptionLegBars([], 0, 0)[0].status).toBe("invalid-budget");
   });
 });
