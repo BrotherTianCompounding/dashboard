@@ -193,7 +193,10 @@ describe("four directional option bars", () => {
     ], 30000, 10000);
     expect(bars.map((b) => b.key)).toEqual(["sell-put", "buy-call", "sell-call", "buy-put"]);
     expect(bars.map((b) => b.currentValue)).toEqual([10000, 2000, 300, 100]);
-    expect(bars.map((b) => b.maxValue)).toEqual([40000, 30000, 30000, 30000]);
+    expect(bars.map((b) => b.maxValue)).toEqual([40000, 15000, 0, 15000]);
+    expect(bars[2].status).toBe("no-limit");
+    expect(bars[2].percentUsed).toBeNull();
+    expect(bars[2].isOver).toBe(false);
   });
   it("turns red at capacity, reports overage and handles zero budgets", () => {
     const bar = calculateOptionLegBars([
