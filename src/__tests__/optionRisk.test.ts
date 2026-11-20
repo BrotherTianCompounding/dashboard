@@ -1,0 +1,236 @@
+import { calculateDeltaExposures, calculateOptionRiskSummary, calculateOptionLegBars, calculateOptionLegGroups } from "../lib/optionRisk";
+import type { ClassifiedHolding, FidelityRow } from "../lib/types";
+
+function holding(overrides: Partial<ClassifiedHolding>): ClassifiedHolding {
+  return {
+    symbol: "",
+    description: "",
+    quantity: 0,
+    currentValue: 0,
+    costBasisTotal: 0,
+    totalGainLossDollar: 0,
+    category: "wheel",
+    ...overrides,
+  };
+}
+
+function row(overrides: Partial<FidelityRow>): FidelityRow {
+  return {
+    accountName: "test",
+    symbol: "",
+    description: "",
+    quantity: 0,
+    lastPrice: 0,
+    currentValue: 0,
+    costBasisTotal: 0,
+    totalGainLossDollar: 0,
+    percentOfAccount: 0,
+    ...overrides,
+  };
+}
+
+describe("calculateOptionRiskSummary", () => {
+  it("uses budget base splits and sell-put assignment value with 130% max", () => {
+    const summary = calculateOptionRiskSummary(
+      [
+        holding({ description: "AAPL JAN 16 2027 $150 PUT", quantity: -2, currentValue: -800 }),
+      ],
+      100000,
+      new Date(2026, 0, 16)
+    );
+    const sellPut = summary.bars.find((bar) => bar.key === "sell-put")!;
+    expect(sellPut.baseBudget).toBe(70000);
+    expect(sellPut.maxValue).toBe(91000);
+    expect(sellPut.currentValue).toBe(30000);
+    expect(sellPut.detail).toBe("$70,000 × 130% = $91,000【70%】");
+  });
+
+  it("turns red when current value exactly reaches max", () => {
+    const summary = calculateOptionRiskSummary(
+      [
+        holding({ description: "AAPL JAN 16 2027 $91 PUT", quantity: -10, currentValue: -800 }),
+      ],
+      100000,
+      new Date(2026, 0, 16)
+    );
+    const sellPut = summary.bars.find((bar) => bar.key === "sell-put")!;
+    expect(sellPut.currentValue).toBe(91000);
+    expect(sellPut.isOver).toBe(true);
+    expect(sellPut.visualPercent).toBe(100);
+  });
+
+  it("keeps exactly eight-month long calls in tactical and longer calls in LEAPS", () => {
+    const summary = calculateOptionRiskSummary(
+      [
+        holding({ description: "QQQ SEP 16 2026 $500 CALL", quantity: 1, currentValue: 4000 }),
+        holding({ description: "QQQ SEP 17 2026 $500 CALL", quantity: 1, currentValue: 9000 }),
+      ],
+      100000,
+      new Date(2026, 0, 16)
+    );
+    expect(summary.bars.find((bar) => bar.key === "tactical")!.currentValue).toBe(4000);
+    expect(summary.bars.find((bar) => bar.key === "leaps-call")!.currentValue).toBe(9000);
+  });
+
+  it("counts matched spread quantities once and keeps credit-spread net value negative", () => {
+    const summary = calculateOptionRiskSummary(
+      [
+        holding({ description: "NVDA MAR 20 2026 $120 PUT", quantity: 1, currentValue: 200 }),
+        holding({ description: "NVDA MAR 20 2026 $125 PUT", quantity: -1, currentValue: -500 }),
+        holding({ description: "NVDA MAR 20 2026 $130 PUT", quantity: -1, currentValue: -700 }),
+      ],
+      100000,
+      new Date(2026, 0, 16)
+    );
+    const tactical = summary.bars.find((bar) => bar.key === "tactical")!;
+    const sellPut = summary.bars.find((bar) => bar.key === "sell-put")!;
+    expect(tactical.currentValue).toBe(-300);
+    expect(tactical.visualPercent).toBe(0);
+    expect(sellPut.currentValue).toBe(13000);
+  });
+});
+
+describe("calculateDeltaExposures", () => {
+  it("combines stock, long call, short put, and short call signs by underlying", () => {
+    const exposures = calculateDeltaExposures(
+      [
+        row({ symbol: "NVDA", description: "NVIDIA CORP", quantity: 10, lastPrice: 100, currentValue: 1000 }),
+        row({ symbol: "-NVDA", description: "NVDA JAN 16 2027 $120 CALL", quantity: 1, currentValue: 1000, delta: 0.6, underlyingPrice: 100 }),
+        row({ symbol: "-NVDA", description: "NVDA JAN 16 2027 $90 PUT", quantity: -1, currentValue: -500, delta: -0.3, underlyingPrice: 100 }),
+        row({ symbol: "-NVDA", description: "NVDA JAN 16 2027 $150 CALL", quantity: -1, currentValue: -300, delta: 0.2, underlyingPrice: 100 }),
+      ],
+      10000
+    );
+    expect(exposures[0].symbol).toBe("NVDA");
+    expect(exposures[0].deltaShares).toBeCloseTo(10 + 60 + 30 - 20);
+    expect(exposures[0].deltaDollarExposure).toBeCloseTo(8000);
+    expect(exposures[0].portfolioPct).toBeCloseTo(80);
+  });
+
+  it("uses current long-call value when delta is missing", () => {
+    const exposures = calculateDeltaExposures(
+      [
+        row({ symbol: "-QQQ", description: "QQQ JAN 16 2027 $500 CALL", quantity: 1, currentValue: 1000, underlyingPrice: 500 }),
+      ],
+      10000
+    );
+    expect(exposures[0].symbol).toBe("QQQ");
+    expect(exposures[0].hasIncompleteData).toBe(false);
+    expect(exposures[0].hasEstimatedExposure).toBe(true);
+    expect(exposures[0].deltaDollarExposure).toBe(1000);
+    expect(exposures[0].portfolioPct).toBe(10);
+  });
+});
+
+describe("missing-delta assignment estimates", () => {
+  it("uses the true multiplier and sorts combined estimates against NAV", () => {
+    const exposures = calculateDeltaExposures([
+      row({ symbol: "AAPL", quantity: 10, lastPrice: 200, currentValue: 2000 }),
+      row({ description: "AAPL JAN 16 2027 $150 PUT", quantity: -2, currentValue: -800, contractMultiplier: 50 }),
+      row({ description: "AAPL JAN 16 2027 $200 CALL", quantity: 1, currentValue: 3000 }),
+      row({ symbol: "QQQ", quantity: 10, lastPrice: 500, currentValue: 5000 }),
+    ], 10000);
+    expect(exposures[0].symbol).toBe("AAPL");
+    expect(exposures[0].optionExposure).toBe(18000);
+    expect(exposures[0].deltaDollarExposure).toBe(20000);
+    expect(exposures[0].portfolioPct).toBe(80);
+    expect(exposures[0].hasIncompleteData).toBe(false);
+  });
+
+  it("keeps unsupported missing-delta short calls incomplete", () => {
+    const exposures = calculateDeltaExposures([
+      row({ description: "QQQ JAN 16 2027 $500 CALL", quantity: -1, currentValue: -1000 }),
+    ], 10000);
+    expect(exposures[0].hasIncompleteData).toBe(true);
+    expect(exposures[0].hasEstimatedExposure).toBe(false);
+  });
+});
+
+describe("exposure fund families", () => {
+  it("merges dollar exposures after using each fund's own price and reranks", () => {
+    const exposures = calculateDeltaExposures([
+      row({ symbol: "QQQ", quantity: 2, lastPrice: 500, currentValue: 1000 }),
+      row({ symbol: "QQQM", quantity: 5, lastPrice: 200, currentValue: 1000 }),
+      row({ symbol: "QQQM-option", description: "QQQM JAN 16 2027 $200 CALL", quantity: 1, currentValue: 300, delta: 0.5, underlyingPrice: 200 }),
+      row({ symbol: "VOO", quantity: 1, lastPrice: 600, currentValue: 600 }),
+      row({ symbol: "SPY", quantity: 2, lastPrice: 550, currentValue: 1100 }),
+      row({ symbol: "FXAIX", quantity: 10, lastPrice: 250, currentValue: 2500 }),
+      row({ symbol: "OTHER", quantity: 1, lastPrice: 5000, currentValue: 5000 }),
+    ], 20000);
+    expect(exposures.map((r) => r.symbol)).toEqual(["QQQ", "OTHER", "VOO"]);
+    expect(exposures[0].stockExposure).toBe(2000);
+    expect(exposures[0].optionExposure).toBe(10000);
+    expect(exposures[0].deltaDollarExposure).toBe(12000);
+    expect(exposures[0].portfolioPct).toBeCloseTo((12000 / 21200) * 100);
+    expect(exposures[2].deltaDollarExposure).toBe(4200);
+    expect(exposures[2].portfolioPct).toBeCloseTo((4200 / 21200) * 100);
+  });
+
+  it("nets opposite directions and preserves estimate and missing-data flags", () => {
+    const exposures = calculateDeltaExposures([
+      row({ symbol: "QQQ", quantity: 1, lastPrice: 500, currentValue: 500 }),
+      row({ description: "QQQM JAN 16 2027 $200 CALL", quantity: -1, currentValue: -100, delta: 0.5, underlyingPrice: 200 }),
+      row({ description: "SPY JAN 16 2027 $550 CALL", quantity: 1, currentValue: 300 }),
+      row({ description: "VOO JAN 16 2027 $600 CALL", quantity: -1, currentValue: -100 }),
+    ], 10000);
+    expect(exposures[0].symbol).toBe("QQQ");
+    expect(exposures[0].deltaDollarExposure).toBe(-9500);
+    expect(exposures[0].portfolioPct).toBeCloseTo((-9500 / 9800) * 100);
+    const voo = exposures.find((r) => r.symbol === "VOO")!;
+    expect(voo.optionExposure).toBe(300);
+    expect(voo.hasEstimatedExposure).toBe(true);
+    expect(voo.hasIncompleteData).toBe(true);
+  });
+});
+
+describe("four directional option bars", () => {
+  it("includes every combination leg exactly once using direction-specific values", () => {
+    const bars = calculateOptionLegBars([
+      holding({ description: "XYZ JAN 15 2027 $100 CALL", quantity: 2, currentValue: 2000 }),
+      holding({ description: "XYZ JAN 15 2027 $100 PUT", quantity: -1, currentValue: -500 }),
+      holding({ description: "XYZ JAN 15 2027 $120 CALL", quantity: -1, currentValue: -300 }),
+      holding({ description: "XYZ JAN 15 2027 $80 PUT", quantity: 1, currentValue: 100 }),
+    ], 30000, 10000);
+    expect(bars.map((b) => b.key)).toEqual(["sell-put", "buy-call", "sell-call", "buy-put"]);
+    expect(bars.map((b) => b.currentValue)).toEqual([10000, 2000, 300, 100]);
+    expect(bars.map((b) => b.maxValue)).toEqual([40000, 15000, 0, 15000]);
+    expect(bars[2].status).toBe("no-limit");
+    expect(bars[2].percentUsed).toBeNull();
+    expect(bars[2].isOver).toBe(false);
+  });
+  it("turns red at capacity, reports overage and handles zero budgets", () => {
+    const bar = calculateOptionLegBars([
+      holding({ description: "XYZ JAN 15 2027 $400 PUT", quantity: -1, currentValue: -200 }),
+    ], 30000, 10000)[0];
+    expect(bar.isOver).toBe(true);
+    expect(bar.visualPercent).toBe(100);
+    expect(bar.overAmount).toBe(0);
+    const over = calculateOptionLegBars([
+      holding({ description: "XYZ JAN 15 2027 $500 PUT", quantity: -1, currentValue: -200 }),
+    ], 30000, 10000)[0];
+    expect(over.overAmount).toBe(10000);
+    expect(over.overPercent).toBe(25);
+    expect(calculateOptionLegBars([], 0, 0)[0].status).toBe("invalid-budget");
+  });
+});
+
+describe("option contract lists", () => {
+  it("lists every recognized option exactly once by buy/sell direction", () => {
+    const groups = calculateOptionLegGroups([
+      holding({ description: "XYZ JAN 15 2027 $100 PUT", quantity: -2, currentValue: -500 }),
+      holding({ description: "XYZ JAN 15 2027 $110 CALL", quantity: 1, currentValue: 800 }),
+      holding({ description: "XYZ JAN 15 2027 $120 CALL", quantity: -1, currentValue: -300 }),
+      holding({ description: "XYZ JAN 15 2027 $90 PUT", quantity: 1, currentValue: 200 }),
+    ]);
+    expect(groups.map((group) => group.items.length)).toEqual([1, 1, 1, 1]);
+    expect(groups.map((group) => group.totalValue)).toEqual([-500, 800, -300, 200]);
+    expect(groups.flatMap((group) => group.items).map((item) => item.quantity))
+      .toEqual([-2, 1, -1, 1]);
+  });
+
+  it("does not silently classify descriptions that are not recognized options", () => {
+    expect(calculateOptionLegGroups([holding({
+      description: "unrecognized instrument", quantity: 1, currentValue: 100,
+    })]).every((group) => group.items.length === 0)).toBe(true);
+  });
+});
