@@ -34,10 +34,6 @@ function isOption(description: string): boolean {
   return /\b(PUT|CALL)\b/.test(description.toUpperCase());
 }
 
-function isPut(description: string): boolean {
-  return /\bPUT\b/.test(description.toUpperCase());
-}
-
 function isCall(description: string): boolean {
   return /\bCALL\b/.test(description.toUpperCase());
 }
@@ -51,6 +47,9 @@ export function classifyHoldings(rows: FidelityRow[]): ClassifiedHolding[] {
       currentValue: row.currentValue,
       costBasisTotal: row.costBasisTotal,
       totalGainLossDollar: row.totalGainLossDollar,
+      delta: row.delta,
+      contractMultiplier: row.contractMultiplier,
+      underlyingPrice: row.underlyingPrice,
     };
 
     // 1. Cash
