@@ -1,112 +1,58 @@
 "use client";
 
-import type { BucketData } from "../lib/types";
+import type { BucketData, OptionLegGroup } from "../lib/types";
 
-function formatDollar(v: number): string {
-  return "$" + Math.round(v).toLocaleString("en-US");
+function formatDollar(value: number): string {
+  const sign = value < 0 ? "−" : "";
+  return `${sign}$${Math.round(Math.abs(value)).toLocaleString("en-US")}`;
 }
 
-/** Accent color per shown option category. */
-const LEG_COLORS: Record<string, string> = {
-  "LEAPS Call": "text-blue-400",
-  "Sell Put": "text-emerald-400",
-  "Sell Call": "text-amber-400",
-};
-const LEG_LABELS: Record<string, string> = {
-  "LEAPS Call": "LEAPS Call 长期看涨",
-  "Sell Put": "Sell Put 卖出看跌",
-  "Sell Call": "Sell Call 卖出看涨",
-};
-
 interface OptionsCashCardProps {
-  cash: BucketData;
   options: BucketData;
 }
 
-/** Block 2 — 期权仓 + 现金: cash ratio on top, options grouped by combo below. */
-export default function OptionsCashCard({ cash, options }: OptionsCashCardProps) {
-  const cashUnder = cash.currentPctOfTotal < cash.targetPctOfTotal - 1;
-  const cashColor = cashUnder ? "text-blue-400" : "text-green-400";
-
-  const items = options.items;
-
+function OptionGroup({ group }: { group: OptionLegGroup }) {
   return (
-    <div className="bg-[#1a1f2e] rounded-xl p-5 flex flex-col">
-      <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
-        期权仓 + 现金 Options &amp; Cash
-      </h2>
-
-      {/* ===== 现金仓 ===== */}
-      <div className="rounded-lg bg-[#141926] p-4 mb-4">
-        <div className="flex items-baseline justify-between">
-          <span className="text-sm font-medium text-gray-300">
-            现金仓 Cash <span className="text-gray-600">（含 pending）</span>
-          </span>
-          <span className="text-lg font-mono text-gray-200">
-            {formatDollar(cash.totalValue)}
-          </span>
-        </div>
-        <div className="flex items-baseline gap-2 mt-1">
-          <span className={`text-4xl font-black tracking-tight ${cashColor}`}>
-            {cash.currentPctOfTotal.toFixed(1)}
-            <span className="text-xl">%</span>
-          </span>
-          <span className="text-xs text-gray-500">
-            占整个账户 · 目标 {cash.targetPctOfTotal.toFixed(1)}%
-          </span>
-        </div>
+    <section className="py-4 first:pt-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-sm font-semibold text-gray-100">{group.label}</h3>
+        <span className="text-xs font-mono text-gray-400">
+          {group.items.length} 份 · {formatDollar(group.totalValue)}
+        </span>
       </div>
 
-      {/* ===== 期权仓 ===== */}
-      <div className="rounded-lg bg-[#141926] p-4">
-        <div className="flex items-baseline justify-between mb-1">
-          <span className="text-sm font-medium text-gray-300">
-            期权仓 Options
-          </span>
+      {group.items.length === 0 ? (
+        <p className="mt-2 text-xs text-gray-600">暂无持仓</p>
+      ) : (
+        <div className="mt-2 space-y-1.5">
+          {group.items.map((item, index) => (
+            <div key={`${group.key}-${item.description}-${index}`} className="flex items-center gap-2 text-xs">
+              <span className="min-w-0 flex-1 truncate text-gray-300" title={item.description}>
+                {item.description}
+              </span>
+              <span className="shrink-0 font-mono text-gray-500">×{item.quantity}</span>
+              <span className="shrink-0 w-20 text-right font-mono text-cyan-300">
+                {formatDollar(item.currentValue)}
+              </span>
+            </div>
+          ))}
         </div>
-        <p className="text-xs text-gray-500 mb-4">
-          占整个账户 {options.currentPctOfTotal.toFixed(1)}% · 目标{" "}
-          {options.targetPctOfTotal.toFixed(1)}%
-          <br />
-          <span className="text-gray-600">
-            合成多头 / 看涨价差 / 看跌价差已计入总额，不单独列出
-          </span>
-        </p>
+      )}
+    </section>
+  );
+}
 
-        <div className="space-y-3">
-          {items.map((item, idx) => {
-            const tickers = item.tickers ?? [];
-            return (
-              <div key={idx}>
-                <div className="flex items-baseline gap-2">
-                  <span
-                    className={`text-xs font-semibold ${
-                      LEG_COLORS[item.label] ?? "text-gray-300"
-                    }`}
-                  >
-                    {LEG_LABELS[item.label] ?? item.label}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    共 {item.contracts ?? 0} 张
-                  </span>
-                  <span className="ml-auto text-xs font-mono text-gray-400 whitespace-nowrap">
-                    {formatDollar(item.value)}
-                  </span>
-                </div>
-                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-300">
-                  {tickers.map((t, ti) => (
-                    <span key={ti} className="whitespace-nowrap">
-                      {t.underlying}{" "}
-                      <span className="font-semibold text-gray-100">
-                        ×{t.contracts}
-                      </span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+export default function OptionsCashCard({ options }: OptionsCashCardProps) {
+  const groups = options.optionLegGroups;
+  return (
+    <div className="bg-[#1a1f2e] rounded-xl p-5 min-w-0">
+      <h2 className="text-sm font-medium text-gray-400 mb-2">
+        期权仓 Options
+      </h2>
+      <div className="divide-y divide-gray-700/60">
+        {groups ? groups.map((group) => <OptionGroup key={group.key} group={group} />) : (
+          <p className="py-4 text-sm text-red-300">期权持仓数据缺失</p>
+        )}
       </div>
     </div>
   );
