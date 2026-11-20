@@ -37,7 +37,7 @@ export default function DeltaExposureCard({ snapshot }: DeltaExposureCardProps) 
           </p>
         </div>
         <p className="text-xs text-gray-500">
-          分母：账户净资产 {formatDollar(snapshot.totalValue)}
+          分母：全部标的净 Delta 敞口绝对值之和
         </p>
       </div>
 
@@ -60,7 +60,7 @@ export default function DeltaExposureCard({ snapshot }: DeltaExposureCardProps) 
                 <th className="w-24 text-left font-medium">标的</th>
                 <th className="text-left font-medium">方向敞口</th>
                 <th className="w-32 text-right font-medium">仓位金额</th>
-                <th className="w-24 text-right font-medium">比例</th>
+                <th className="w-24 text-right font-medium">敞口占比</th>
                 <th className="w-32 text-right font-medium">正股敞口</th>
                 <th className="w-32 text-right font-medium">期权敞口</th>
               </tr>
