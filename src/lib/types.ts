@@ -162,6 +162,8 @@ export interface OptionLegItem {
   underlying: string;
   quantity: number;
   currentValue: number;
+  /** Assignment amount for short puts; otherwise the absolute market value. */
+  exposureValue: number;
 }
 
 export interface OptionLegGroup {
@@ -169,6 +171,8 @@ export interface OptionLegGroup {
   label: string;
   items: OptionLegItem[];
   totalValue: number;
+  /** Decision-useful amount: assignment obligation for Sell Put, market value otherwise. */
+  exposureValue: number;
 }
 
 export interface BullishAllocation {
