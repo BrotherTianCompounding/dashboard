@@ -1,7 +1,7 @@
 import { calculateTargets } from "./calculateTargets";
 import { classifyHoldings } from "./classifyHoldings";
 import { classifyOptionCombos } from "./classifyOptionCombos";
-import { calculateDeltaExposures, calculateOptionRiskSummary, calculateBullishAllocation, calculateOptionLegBars } from "./optionRisk";
+import { calculateDeltaExposures, calculateOptionRiskSummary, calculateBullishAllocation, calculateOptionLegGroups } from "./optionRisk";
 import type {
   FidelityRow,
   PortfolioSnapshot,
@@ -148,7 +148,7 @@ export function buildSnapshot(
       items: optionsItems,
       optionRisk,
       bullishAllocation,
-      optionLegBars: calculateOptionLegBars(optionsHoldings, optionBudgetBase, totalValue * targets.cash / 100),
+      optionLegGroups: calculateOptionLegGroups(optionsHoldings),
     },
   ];
 
