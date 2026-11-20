@@ -472,10 +472,10 @@ export function calculateOptionLegBars(
 /** Return every recognized option contract once, grouped by its trading direction. */
 export function calculateOptionLegGroups(holdings: ClassifiedHolding[]): OptionLegGroup[] {
   const groups: OptionLegGroup[] = [
-    { key: "sell-put", label: "Sell Put 卖出看跌", items: [], totalValue: 0 },
-    { key: "buy-call", label: "Buy Call 买入看涨", items: [], totalValue: 0 },
-    { key: "sell-call", label: "Sell Call 卖出看涨", items: [], totalValue: 0 },
-    { key: "buy-put", label: "Buy Put 买入看跌", items: [], totalValue: 0 },
+    { key: "sell-put", label: "Sell Put 卖出看跌", items: [], totalValue: 0, exposureValue: 0 },
+    { key: "buy-call", label: "Buy Call 买入看涨", items: [], totalValue: 0, exposureValue: 0 },
+    { key: "sell-call", label: "Sell Call 卖出看涨", items: [], totalValue: 0, exposureValue: 0 },
+    { key: "buy-put", label: "Buy Put 买入看跌", items: [], totalValue: 0, exposureValue: 0 },
   ];
 
   for (const [index, holding] of holdings.entries()) {
@@ -490,8 +490,14 @@ export function calculateOptionLegGroups(holdings: ClassifiedHolding[]): OptionL
       underlying: leg.underlying,
       quantity: leg.qty,
       currentValue: holding.currentValue,
+      exposureValue: leg.right === "PUT" && leg.qty < 0
+        ? leg.strike * leg.multiplier * leg.absQty
+        : Math.abs(holding.currentValue),
     });
     group.totalValue += holding.currentValue;
+    group.exposureValue += leg.right === "PUT" && leg.qty < 0
+      ? leg.strike * leg.multiplier * leg.absQty
+      : Math.abs(holding.currentValue);
   }
 
   for (const group of groups) {
