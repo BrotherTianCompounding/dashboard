@@ -1,82 +1,59 @@
 "use client";
 
-import type { BucketData, BudgetUsageBar } from "../lib/types";
+import type { BucketData, OptionLegGroup } from "../lib/types";
 
-function formatDollar(v: number): string {
-  const sign = v < 0 ? "−" : "";
-  return `${sign}$${Math.round(Math.abs(v)).toLocaleString("en-US")}`;
+function formatDollar(value: number): string {
+  const sign = value < 0 ? "−" : "";
+  return `${sign}$${Math.round(Math.abs(value)).toLocaleString("en-US")}`;
 }
-
-function formatPct(v: number | null): string {
-  return v === null ? "--" : `${v.toFixed(1)}%`;
-}
-
-const BAR_COLORS: Record<BudgetUsageBar["key"], string> = {
-  "sell-put": "bg-emerald-500",
-  "leaps-call": "bg-blue-500",
-  tactical: "bg-cyan-500",
-  "buy-call": "bg-blue-500",
-  "sell-call": "bg-amber-500",
-  "buy-put": "bg-pink-500",
-};
 
 interface OptionsCashCardProps {
-  cash: BucketData;
   options: BucketData;
 }
 
-function BudgetBar({ bar }: { bar: BudgetUsageBar }) {
-  const fillColor = bar.isOver ? "bg-red-500" : BAR_COLORS[bar.key];
-  const currentText = bar.status === "no-limit"
-    ? `当前：${formatDollar(bar.currentValue)}`
-    : bar.status === "invalid-budget"
-    ? "预算基数异常"
-    : bar.overAmount > 0
-      ? `当前：${formatDollar(bar.currentValue)}（+${formatDollar(bar.overAmount)}，超额${formatPct(bar.overPercent)}）`
-      : `当前：${formatDollar(bar.currentValue)}（${formatPct(bar.percentUsed)}）`;
-
+function OptionGroup({ group }: { group: OptionLegGroup }) {
   return (
-    <div className="py-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-gray-100">{bar.label}</span>
-            {bar.netValueNote && (
-              <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] text-gray-400">
-                {bar.netValueNote}
-              </span>
-            )}
-          </div>
-          <p className="mt-0.5 text-[11px] text-gray-500">额度 {bar.detail}</p>
-        </div>
-        <span className={`shrink-0 text-xs font-mono ${bar.isOver ? "text-red-300" : "text-gray-300"}`}>
-          {bar.status === "no-limit" ? "无额度限制" : formatPct(bar.percentUsed)}
+    <section className="py-4 first:pt-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-sm font-semibold text-gray-100">{group.label}</h3>
+        <span className="text-xs font-mono text-gray-400">
+          {group.items.length} 份 · {formatDollar(group.totalValue)}
         </span>
       </div>
 
-      <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-gray-800">
-        <div
-          className={`h-full rounded-full ${fillColor} transition-all duration-700 ease-out`}
-          style={{ width: `${bar.visualPercent}%` }}
-        />
-      </div>
-
-      <p className={`mt-1.5 text-xs font-mono ${bar.overAmount > 0 ? "text-red-300" : "text-gray-400"}`}>
-        {currentText}
-      </p>
-    </div>
+      {group.items.length === 0 ? (
+        <p className="mt-2 text-xs text-gray-600">暂无持仓</p>
+      ) : (
+        <div className="mt-2 space-y-1.5">
+          {group.items.map((item, index) => (
+            <div key={`${group.key}-${item.description}-${index}`} className="flex items-center gap-2 text-xs">
+              <span className="min-w-0 flex-1 truncate text-gray-300" title={item.description}>
+                {item.description}
+              </span>
+              <span className="shrink-0 font-mono text-gray-500">×{item.quantity}</span>
+              <span className="shrink-0 w-20 text-right font-mono text-cyan-300">
+                {formatDollar(item.currentValue)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
-
 export default function OptionsCashCard({ options }: OptionsCashCardProps) {
-  const bars = options.optionLegBars;
+  const groups = options.optionLegGroups;
   return (
     <div className="bg-[#1a1f2e] rounded-xl p-5 min-w-0">
-      <h2 className="text-sm font-medium text-gray-400 mb-1">期权仓 Options · 目标 {options.targetPctOfTotal.toFixed(1)}%</h2>
-      {bars ? <div className="divide-y divide-gray-700/60">
-        {bars.map((bar) => <BudgetBar key={bar.key} bar={bar} />)}
-      </div> : <p className="text-sm text-red-300">仓位数据缺失</p>}
+      <h2 className="text-sm font-medium text-gray-400 mb-2">
+        期权仓 Options
+      </h2>
+      <div className="divide-y divide-gray-700/60">
+        {groups ? groups.map((group) => <OptionGroup key={group.key} group={group} />) : (
+          <p className="py-4 text-sm text-red-300">期权持仓数据缺失</p>
+        )}
+      </div>
     </div>
   );
 }
