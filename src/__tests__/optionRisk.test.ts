@@ -224,6 +224,7 @@ describe("option contract lists", () => {
     ]);
     expect(groups.map((group) => group.items.length)).toEqual([1, 1, 1, 1]);
     expect(groups.map((group) => group.totalValue)).toEqual([-500, 800, -300, 200]);
+    expect(groups.map((group) => group.exposureValue)).toEqual([20000, 800, 300, 200]);
     expect(groups.flatMap((group) => group.items).map((item) => item.quantity))
       .toEqual([-2, 1, -1, 1]);
   });
