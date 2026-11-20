@@ -6,6 +6,7 @@ import type {
   FidelityRow,
   OptionBudgetConfig,
   OptionRiskSummary,
+  OptionLegGroup,
 } from "./types";
 
 export const OPTION_BUDGET_CONFIG: OptionBudgetConfig = {
@@ -275,21 +276,18 @@ export function calculateDeltaExposures(rows: FidelityRow[], totalValue: number)
 
   rows.forEach((row, i) => {
     if (row.symbol === "Pending activity") return;
-    const parsed = parseOptionLeg(
-      {
-        symbol: row.symbol,
-        description: row.description,
-        quantity: row.quantity,
-        currentValue: row.currentValue,
-        costBasisTotal: row.costBasisTotal,
-        totalGainLossDollar: row.totalGainLossDollar,
-        category: "wheel",
-        delta: row.delta,
-        contractMultiplier: row.contractMultiplier,
-        underlyingPrice: row.underlyingPrice,
-      },
-      i
-    );
+    const parsed = parseOptionLeg({
+      symbol: row.symbol,
+      description: row.description,
+      quantity: row.quantity,
+      currentValue: row.currentValue,
+      costBasisTotal: row.costBasisTotal,
+      totalGainLossDollar: row.totalGainLossDollar,
+      category: "wheel",
+      delta: row.delta,
+      contractMultiplier: row.contractMultiplier,
+      underlyingPrice: row.underlyingPrice,
+    }, i);
 
     if (parsed) {
       const target = ensure(parsed.underlying);
@@ -332,36 +330,32 @@ export function calculateDeltaExposures(rows: FidelityRow[], totalValue: number)
     target.stockExposure += row.quantity * price;
   });
 
-  return Array.from(bySymbol.values())
-    .map((row) => {
-      const deltaDollarExposure = row.stockExposure + row.optionExposure;
-      return {
-        ...row,
-        deltaDollarExposure,
-        portfolioPct: totalValue > 0 ? (deltaDollarExposure / totalValue) * 100 : 0,
-      };
-    })
-    // Calculate using each instrument's own price before merging dollar exposures.
-    .reduce<DeltaExposureRow[]>((groups, row) => {
+  const groups = Array.from(bySymbol.values())
+    .map((row) => ({ ...row, deltaDollarExposure: row.stockExposure + row.optionExposure }))
+    .reduce<DeltaExposureRow[]>((merged, row) => {
       const symbol = EXPOSURE_GROUPS[row.symbol.toUpperCase()] ?? row.symbol;
-      const existing = groups.find((group) => group.symbol === symbol);
+      const existing = merged.find((group) => group.symbol === symbol);
       if (!existing) {
-        groups.push({ ...row, symbol });
+        merged.push({ ...row, symbol });
       } else {
         existing.stockExposure += row.stockExposure;
         existing.optionExposure += row.optionExposure;
         existing.deltaDollarExposure += row.deltaDollarExposure;
-        existing.portfolioPct = totalValue > 0 ? existing.deltaDollarExposure / totalValue * 100 : 0;
         existing.hasIncompleteData ||= row.hasIncompleteData;
         existing.hasEstimatedExposure ||= row.hasEstimatedExposure;
-        // Different funds have no common share unit or single underlying price.
         existing.deltaShares = 0;
         existing.underlyingPrice = null;
       }
-      return groups;
+      return merged;
     }, [])
     .filter((row) => row.deltaDollarExposure !== 0 || row.hasIncompleteData)
     .sort((a, b) => Math.abs(b.deltaDollarExposure) - Math.abs(a.deltaDollarExposure));
+
+  const grossExposure = groups.reduce((sum, row) => sum + Math.abs(row.deltaDollarExposure), 0);
+  return groups.map((row) => ({
+    ...row,
+    portfolioPct: grossExposure > 0 ? (row.deltaDollarExposure / grossExposure) * 100 : 0,
+  }));
 }
 
 export const ALLOCATION_CONFIG = {
@@ -473,4 +467,35 @@ export function calculateOptionLegBars(
       key === "sell-put" ? "接股金额" : key === "sell-call" ? "回补市值" : "持仓市值");
     return key === "sell-call" ? { ...bar, status: "no-limit" as const } : bar;
   });
+}
+
+/** Return every recognized option contract once, grouped by its trading direction. */
+export function calculateOptionLegGroups(holdings: ClassifiedHolding[]): OptionLegGroup[] {
+  const groups: OptionLegGroup[] = [
+    { key: "sell-put", label: "Sell Put 卖出看跌", items: [], totalValue: 0 },
+    { key: "buy-call", label: "Buy Call 买入看涨", items: [], totalValue: 0 },
+    { key: "sell-call", label: "Sell Call 卖出看涨", items: [], totalValue: 0 },
+    { key: "buy-put", label: "Buy Put 买入看跌", items: [], totalValue: 0 },
+  ];
+
+  for (const [index, holding] of holdings.entries()) {
+    const leg = parseOptionLeg(holding, index);
+    if (!leg || leg.qty === 0) continue;
+    const key = leg.right === "PUT"
+      ? leg.qty < 0 ? "sell-put" : "buy-put"
+      : leg.qty < 0 ? "sell-call" : "buy-call";
+    const group = groups.find((item) => item.key === key)!;
+    group.items.push({
+      description: holding.description,
+      underlying: leg.underlying,
+      quantity: leg.qty,
+      currentValue: holding.currentValue,
+    });
+    group.totalValue += holding.currentValue;
+  }
+
+  for (const group of groups) {
+    group.items.sort((a, b) => Math.abs(b.currentValue) - Math.abs(a.currentValue));
+  }
+  return groups;
 }
