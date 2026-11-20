@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 interface SettingsCardProps {
+  showIncome?: boolean;
   age: number;
   hasIncome: boolean;
   onAgeChange: (age: number) => void;
@@ -16,6 +17,7 @@ function clampAge(v: number): number {
 
 export default function SettingsCard({
   age,
+  showIncome = true,
   hasIncome,
   onAgeChange,
   onIncomeChange,
@@ -75,7 +77,7 @@ export default function SettingsCard({
         />
       </div>
 
-      <div className="flex items-center gap-3">
+      {showIncome && <div className="flex items-center gap-3">
         <label
           htmlFor="settings-income"
           className="text-sm text-gray-300 whitespace-nowrap"
@@ -91,7 +93,7 @@ export default function SettingsCard({
           <option value="yes">有收入</option>
           <option value="no">没有收入</option>
         </select>
-      </div>
+      </div>}
     </div>
   );
 }
