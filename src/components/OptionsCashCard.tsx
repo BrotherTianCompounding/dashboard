@@ -5,11 +5,11 @@ function formatDollar(value: number): string {
   return `${sign}$${Math.round(Math.abs(value)).toLocaleString("en-US")}`;
 }
 
-const SUMMARY_META: Record<OptionLegKind, { metric: string; tone: string }> = {
-  "sell-put": { metric: "接股义务", tone: "text-amber-300" },
-  "buy-call": { metric: "持仓市值", tone: "text-cyan-300" },
-  "sell-call": { metric: "回补市值", tone: "text-violet-300" },
-  "buy-put": { metric: "持仓市值", tone: "text-rose-300" },
+const SUMMARY_META: Record<OptionLegKind, { metric: string; tone: string; shortLabel: string }> = {
+  "sell-put": { metric: "接股义务", tone: "text-amber-300", shortLabel: "Sell Put" },
+  "buy-call": { metric: "持仓市值", tone: "text-cyan-300", shortLabel: "Buy Call" },
+  "sell-call": { metric: "回补市值", tone: "text-violet-300", shortLabel: "Sell Call" },
+  "buy-put": { metric: "持仓市值", tone: "text-rose-300", shortLabel: "Buy Put" },
 };
 
 interface OptionsCashCardProps {
@@ -36,8 +36,9 @@ function buildTopUnderlyings(groups: OptionLegGroup[]): UnderlyingSummary[] {
       };
       current.value += item.exposureValue;
       current.contracts += Math.abs(item.quantity);
-      if (!current.directions.includes(group.label.split(" ")[0])) {
-        current.directions.push(group.label.split(" ")[0]);
+      const shortLabel = SUMMARY_META[group.key].shortLabel;
+      if (!current.directions.includes(shortLabel)) {
+        current.directions.push(shortLabel);
       }
       byUnderlying.set(item.underlying, current);
     }
