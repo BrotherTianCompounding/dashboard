@@ -135,7 +135,7 @@ export interface BucketData {
   items: BucketItem[];
   optionRisk?: OptionRiskSummary;
   bullishAllocation?: BullishAllocation;
-  optionLegBars?: BudgetUsageBar[];
+  optionLegGroups?: OptionLegGroup[];
 }
 
 /** Full parsed portfolio snapshot */
@@ -153,6 +153,22 @@ export interface PortfolioComparison {
   previous: PortfolioSnapshot;
   valueDelta: number;
   valueDeltaPercent: number;
+}
+
+export type OptionLegKind = "sell-put" | "buy-call" | "sell-call" | "buy-put";
+
+export interface OptionLegItem {
+  description: string;
+  underlying: string;
+  quantity: number;
+  currentValue: number;
+}
+
+export interface OptionLegGroup {
+  key: OptionLegKind;
+  label: string;
+  items: OptionLegItem[];
+  totalValue: number;
 }
 
 export interface BullishAllocation {
