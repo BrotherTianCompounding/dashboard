@@ -1,6 +1,7 @@
+import { calculateTargets } from "./calculateTargets";
 import { classifyHoldings } from "./classifyHoldings";
 import { classifyOptionCombos } from "./classifyOptionCombos";
-import { calculateTargets } from "./calculateTargets";
+import { calculateDeltaExposures, calculateOptionRiskSummary, calculateBullishAllocation, calculateOptionLegGroups } from "./optionRisk";
 import type {
   FidelityRow,
   PortfolioSnapshot,
@@ -23,9 +24,8 @@ export function buildSnapshot(
   manualCash: number = 0
 ): PortfolioSnapshot {
   const totalValue = calcTotal(rows) + manualCash;
-  const classified = classifyHoldings(
-    rows.filter((r) => r.symbol !== "Pending activity")
-  );
+  const positionRows = rows.filter((r) => r.symbol !== "Pending activity");
+  const classified = classifyHoldings(positionRows);
   const targets = calculateTargets(age, hasIncome);
 
   const pct = (numerator: number, denom: number) =>
@@ -42,6 +42,7 @@ export function buildSnapshot(
     VOO: "VOO",
     SPY: "VOO",
     FXAIX: "VOO",
+    FFAIX: "VOO",
   };
   const MIN_ITEM_PCT = 1;
 
@@ -100,9 +101,7 @@ export function buildSnapshot(
     0
   );
 
-  // Shown single-leg categories only (LEAPS Call / Sell Put / Sell Call), each
-  // collapsed to a per-underlying contract tally. Synthetic longs and spreads
-  // are detected purely to exclude their legs, and are not displayed.
+  // Legacy single-leg categories are retained in snapshot data for compatibility.
   const optionsItems: BucketItem[] = classifyOptionCombos(optionsHoldings).map(
     (c) => ({
       label: c.label,
@@ -113,6 +112,15 @@ export function buildSnapshot(
       tickers: c.tickers,
     })
   );
+
+  const optionBudgetBase = totalValue * ((targets.wheel + targets.leaps) / 100);
+  const optionRisk = calculateOptionRiskSummary(
+    optionsHoldings,
+    optionBudgetBase,
+    date
+  );
+
+  const bullishAllocation = calculateBullishAllocation(optionsHoldings, totalValue, cashValue);
 
   const buckets: BucketData[] = [
     {
@@ -134,12 +142,21 @@ export function buildSnapshot(
     {
       key: "options",
       label: "期权仓 Options",
-      totalValue: optionsValue,
-      currentPctOfTotal: pct(optionsValue, totalValue),
+      totalValue: bullishAllocation.calls.currentValue,
+      currentPctOfTotal: pct(bullishAllocation.calls.currentValue, totalValue),
       targetPctOfTotal: targets.wheel + targets.leaps,
       items: optionsItems,
+      optionRisk,
+      bullishAllocation,
+      optionLegGroups: calculateOptionLegGroups(optionsHoldings),
     },
   ];
 
-  return { totalValue, buckets, date, fileName };
+  return {
+    totalValue,
+    buckets,
+    date,
+    fileName,
+    deltaExposures: calculateDeltaExposures(rows, totalValue),
+  };
 }
