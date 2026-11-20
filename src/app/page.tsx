@@ -175,10 +175,7 @@ export default function Home() {
             bucket={current.buckets.find((b) => b.key === "safe-side")!}
             cash={current.buckets.find((b) => b.key === "cash")!}
           />
-          <OptionsCashCard
-            cash={current.buckets.find((b) => b.key === "cash")!}
-            options={current.buckets.find((b) => b.key === "options")!}
-          />
+          <OptionsCashCard options={current.buckets.find((b) => b.key === "options")!} />
         </div>
       )}
 
