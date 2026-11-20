@@ -1,4 +1,4 @@
-import { calculateDeltaExposures, calculateOptionRiskSummary, calculateOptionLegBars } from "../lib/optionRisk";
+import { calculateDeltaExposures, calculateOptionRiskSummary, calculateOptionLegBars, calculateOptionLegGroups } from "../lib/optionRisk";
 import type { ClassifiedHolding, FidelityRow } from "../lib/types";
 
 function holding(overrides: Partial<ClassifiedHolding>): ClassifiedHolding {
@@ -133,7 +133,7 @@ describe("missing-delta assignment estimates", () => {
     expect(exposures[0].symbol).toBe("AAPL");
     expect(exposures[0].optionExposure).toBe(18000);
     expect(exposures[0].deltaDollarExposure).toBe(20000);
-    expect(exposures[0].portfolioPct).toBe(200);
+    expect(exposures[0].portfolioPct).toBe(80);
     expect(exposures[0].hasIncompleteData).toBe(false);
   });
 
@@ -161,9 +161,9 @@ describe("exposure fund families", () => {
     expect(exposures[0].stockExposure).toBe(2000);
     expect(exposures[0].optionExposure).toBe(10000);
     expect(exposures[0].deltaDollarExposure).toBe(12000);
-    expect(exposures[0].portfolioPct).toBe(60);
+    expect(exposures[0].portfolioPct).toBeCloseTo((12000 / 21200) * 100);
     expect(exposures[2].deltaDollarExposure).toBe(4200);
-    expect(exposures[2].portfolioPct).toBe(21);
+    expect(exposures[2].portfolioPct).toBeCloseTo((4200 / 21200) * 100);
   });
 
   it("nets opposite directions and preserves estimate and missing-data flags", () => {
@@ -175,7 +175,7 @@ describe("exposure fund families", () => {
     ], 10000);
     expect(exposures[0].symbol).toBe("QQQ");
     expect(exposures[0].deltaDollarExposure).toBe(-9500);
-    expect(exposures[0].portfolioPct).toBe(-95);
+    expect(exposures[0].portfolioPct).toBeCloseTo((-9500 / 9800) * 100);
     const voo = exposures.find((r) => r.symbol === "VOO")!;
     expect(voo.optionExposure).toBe(300);
     expect(voo.hasEstimatedExposure).toBe(true);
@@ -211,5 +211,26 @@ describe("four directional option bars", () => {
     expect(over.overAmount).toBe(10000);
     expect(over.overPercent).toBe(25);
     expect(calculateOptionLegBars([], 0, 0)[0].status).toBe("invalid-budget");
+  });
+});
+
+describe("option contract lists", () => {
+  it("lists every recognized option exactly once by buy/sell direction", () => {
+    const groups = calculateOptionLegGroups([
+      holding({ description: "XYZ JAN 15 2027 $100 PUT", quantity: -2, currentValue: -500 }),
+      holding({ description: "XYZ JAN 15 2027 $110 CALL", quantity: 1, currentValue: 800 }),
+      holding({ description: "XYZ JAN 15 2027 $120 CALL", quantity: -1, currentValue: -300 }),
+      holding({ description: "XYZ JAN 15 2027 $90 PUT", quantity: 1, currentValue: 200 }),
+    ]);
+    expect(groups.map((group) => group.items.length)).toEqual([1, 1, 1, 1]);
+    expect(groups.map((group) => group.totalValue)).toEqual([-500, 800, -300, 200]);
+    expect(groups.flatMap((group) => group.items).map((item) => item.quantity))
+      .toEqual([-2, 1, -1, 1]);
+  });
+
+  it("does not silently classify descriptions that are not recognized options", () => {
+    expect(calculateOptionLegGroups([holding({
+      description: "unrecognized instrument", quantity: 1, currentValue: 100,
+    })]).every((group) => group.items.length === 0)).toBe(true);
   });
 });
