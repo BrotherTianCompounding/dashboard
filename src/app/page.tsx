@@ -4,7 +4,6 @@ import { useState, useCallback, useMemo } from "react";
 import UploadZone from "../components/UploadZone";
 import PortfolioOverview from "../components/PortfolioOverview";
 import StockBucketCard from "../components/StockBucketCard";
-import OptionsCashCard from "../components/OptionsCashCard";
 import DeltaExposureCard from "../components/DeltaExposureCard";
 import SettingsCard from "../components/SettingsCard";
 import { buildSnapshot } from "../lib/buildSnapshot";
@@ -168,14 +167,13 @@ export default function Home() {
 
       {current && (
         <div
-          className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 animate-fade-in"
+          className="animate-fade-in"
           style={{ animationDelay: "0.2s", opacity: 0 }}
         >
           <StockBucketCard
             bucket={current.buckets.find((b) => b.key === "safe-side")!}
             cash={current.buckets.find((b) => b.key === "cash")!}
           />
-          <OptionsCashCard options={current.buckets.find((b) => b.key === "options")!} />
         </div>
       )}
 
